@@ -74,7 +74,10 @@ r53 --zone example.com --name test --value foo.bar.com  # create/update a CNAME 
 r53 --profile work ...                                  # use the keys and configuration from the work profile in .aws/credentials
 r53 --region us-east-1                                  # override the region specified in .aws configuration (where is your instance?)
 
-The script doesn't support aliases or weighting because I don't understand or use them.  It doesn't support management of zones because this is too rare a task for me to automate.  It doesn't support all record types that Route53 supports because I don't want to accidentally mess up my zone records.  It doesn't do a lot of error checking, expecting boto to throw useful exceptions.
+The script doesn't support aliases or weighting because I don't understand or use them.  It doesn't support management
+of zones because this is too rare a task for me to automate.  It doesn't support all record types that Route53 supports
+because I don't want to accidentally mess up my zone records.  It doesn't do a lot of error checking, expecting boto to
+throw useful exceptions.
 
 Troubleshooting:
 botocore InvalidClientTokenId  - this means that your credentials are wrong or missing.  Set up new a new key pair with IAM.
