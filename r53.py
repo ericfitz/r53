@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import boto3
 import urllib.request as request
@@ -137,7 +138,6 @@ parser.add_argument('--profile', action='store', help='Use a specific named prof
 parser.add_argument('--region', action='store', help='target AWS API calls against a specific region where applicable')
 parser.add_argument('--delete', action='store_true', help='delete a resource record from a zone (default operation is upsert if a value or TTL is specified, and describe otherwise)')
 # default operation is list. If a value is specified, operation is upsert.  Delete must be explicit.
-parser.add_argument('--list-hosted-zones', action='store_true', help='list all hosted zones')
 parser.add_argument('--zone', action='store', help='DNS name of target zone')
 parser.add_argument('--name', action='store', help='name of resource record')
 parser.add_argument('--type', action='store', help='resource record type', choices=['A','AAAA','CAA','CNAME','MX','NAPTR','SPF','SRV','TXT'])
@@ -181,7 +181,7 @@ if value != None:
     action = 'UPSERT'
 elif args.delete == True:
     action = 'DELETE'
-elif args.list_hosted_zones == True:
+elif args.zone == None:
     action = 'LISTZONES'
 
 # figure out the record type if implied
@@ -213,7 +213,7 @@ elif action == 'LISTZONES':
     print('Action: {}'.format(action))
     list_hosted_zones()
 elif action == 'UPSERT' or action == 'DELETE':
-    print('Action: {}, zone: {}, type: {}, name: {}, value: {}, ttl: {}'.format(action, zoneid, type, record_name, value, args.ttl))
+    print('Action: {}, zone: {}, type: {}, name: {}, value: {}, ttl: {}'.format(action, zoneid, type, record_name, value, ttl))
     change_rr(action, zoneid, type, record_name, value, args.ttl)
 
 print('Success')
