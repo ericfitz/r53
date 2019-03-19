@@ -57,7 +57,8 @@ pip install boto3
 The script tries to infer as much information as possible:
 - If no zone is specified, the script attempts to list hosted zones.
 - If only a zone and a record name are specified, the script attempts to look up and display matching records.
-- If a new value is provided for the record itself or for the TTL, the script attempts to upsert (add or update) the record.
+- If a new value is provided for the record itself or for the TTL, the script attempts to upsert (add or
+  update) the record.
 - Deletes explicitly require the --delete option.
 - Type is optional if the type can be cleanly inferred from the value (e.g. A, AAAA or CNAME).
 
@@ -65,14 +66,21 @@ r53 --help                                              # the above text
 r53                                                     # list hosted zones
 r53 --zone example.com --name test                      # display all records with name test in zone example.com
 r53 --zone example.com --name test --type A --delete    # type is required for delete
-r53 --zone example.com --name test --myip               # create/update an A record named test using your ip (i.e. dynamic DNS)
+r53 --zone example.com --name test --myip               # create/update an A record named test using your ip
+                                                          (i.e. dynamic DNS)
 r53 --zone example.com --name test --eip <eip-id>       # create/update an A record for an EIP
-r53 --zone example.com --name test --instanceid i-123   # create/update an A record for the public IP addr of an instance
-r53 --zone example.com --name test --value 1.2.3.4      # create/update an A record (--type A is optional as IPv4 implies A)
-r53 --zone example.com --name test --value ::1          # create/update an AAAA record (--type AAAA is optional as IPv6 implies AAAA)
-r53 --zone example.com --name test --value foo.bar.com  # create/update a CNAME record (--type CNAME is optional as hostname implies)
-r53 --profile work ...                                  # use the keys and configuration from the work profile in .aws/credentials
-r53 --region us-east-1                                  # override the region specified in .aws configuration (where is your instance?)
+r53 --zone example.com --name test --instanceid i-123   # create/update an A record for the public IP addr of
+                                                          an instance
+r53 --zone example.com --name test --value 1.2.3.4      # create/update an A record (--type A is optional as
+                                                          IPv4 implies A)
+r53 --zone example.com --name test --value ::1          # create/update an AAAA record (--type AAAA is optional
+                                                          as IPv6 implies AAAA)
+r53 --zone example.com --name test --value foo.bar.com  # create/update a CNAME record (--type CNAME is optional
+                                                          as hostname implies)
+r53 --profile profilename ...                           # use the keys and configuration from the profilename
+                                                          profile in ~/.aws/credentials
+r53 --region us-east-1 ...                              # override the region specified in .aws configuration
+                                                          (where is your instance?)
 
 The script doesn't support aliases or weighting because I don't understand or use them.  It doesn't support management
 of zones because this is too rare a task for me to automate.  It doesn't support all record types that Route53 supports
