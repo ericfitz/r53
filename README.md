@@ -90,5 +90,4 @@ throw useful exceptions.
 Troubleshooting:
 botocore InvalidClientTokenId  - this means that your credentials are wrong or missing.  Set up new a new key pair with IAM.
 
-The command line parser is really buggy and could use a cleanup.  If you're interested, send a pull request.
 ```
