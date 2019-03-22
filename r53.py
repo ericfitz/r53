@@ -32,7 +32,8 @@ def is_valid_ipv4_address(address):
         return address.count('.') == 3 # ensure that the address was complete and not padded with 0's by the socket library
     except socket.error:  # not a valid address
         return False
-
+    except TypeError:
+        return False
     return True
 
 def is_valid_ipv6_address(address):
@@ -40,15 +41,20 @@ def is_valid_ipv6_address(address):
         socket.inet_pton(socket.AF_INET6, address)
     except socket.error:  # not a valid address
         return False
+    except TypeError:
+        return False
     return True
 
 # https://stackoverflow.com/questions/2532053/validate-a-hostname-string
 def is_valid_dnsname(dnsname):
-    if len(dnsname) > 255:
+    try:
+        if len(dnsname) > 255:
+            return False
+        if dnsname[-1] == ".":
+            dnsname = dnsname[:-1] # strip exactly one dot from the right, if present
+        allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
+    except TypeError:
         return False
-    if dnsname[-1] == ".":
-        dnsname = dnsname[:-1] # strip exactly one dot from the right, if present
-    allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
     return all(allowed.match(x) for x in dnsname.split("."))
 
 def is_valid_hostname(hostname):
@@ -102,10 +108,12 @@ def list_rr(zone, name):
         rrsets = response['ResourceRecordSets']
         for rrset in rrsets:
             rrset_name = rrset['Name'].rstrip(".")
-            if name == rrset_name:
+            try:
                 rrs = rrset['ResourceRecords']
                 for rr in rrs:
                     print('Name: {}, Type: {}, TTL: {}, Value: {}'.format(rrset_name, rrset['Type'], rrset['TTL'], rr['Value']))
+            except KeyError: # A records for ELB have an odd format, just print the JSON for them
+                print(rrset)
     return
 
 def change_rr(action, zone, type, name, value, ttl):
@@ -149,11 +157,12 @@ parser.add_argument('--myip', action='store_true', help='sets value to the calli
 parser.add_argument('--instanceid', action='store', help='EC2 instance ID; sets value to the public IP address of the instance. Type and value parameters are ignored if instance is specified.')
 
 args = parser.parse_args()
+print(args) # for debugging
 
 if args.profile != None:
     boto3.setup_default_session(profile_name=args.profile)
 
-# AWS Route 53 is global, not regional, so we can ignore region
+# AWS Route 53 is global, not regional, so we can ignore region for Route 53 connection.
 route53 = boto3.client('route53')
 
 if args.region != None:
@@ -161,45 +170,65 @@ if args.region != None:
 else:
     ec2 = boto3.client('ec2')
 
-# no validation needed for zone - let Route 53 raise the exception
+# we're going to infer the desired action from the parameters provided
+action = 'ERROR'
+if args.zone == None:
+    action = 'LISTZONES'  # we need a zone name for almost everything.  No zone name -> list zones
+elif args.name == None:   # we need a record name for any record manipulation.  No record name -> list records in zone
+    action = 'LIST'
 
-# no validation needed for name - let Route 53 raise the exception
-
-# figure out the value to set
+# figure out the action to set
 value = args.value
-if value == None:
-    if args.myip == True:
-        value = get_my_ip()
-    elif args.eip != None:
-        value = get_ip_from_eip(args.eip)
-    elif args.instanceid != None:
-        value = get_instance_ip(args.instanceid)
 
-# figure out the action
-action = 'LIST'
-if value != None:
-    action = 'UPSERT'
-elif args.delete == True:
-    action = 'DELETE'
-elif args.zone == None:
-    action = 'LISTZONES'
+# figure out the action if no value is specified
+if value == None and action == 'ERROR': # we don't know the action yet, so you must want to manipulate a record
+                                        # but if you didn't give us a value, then we have to figure out what you
+                                        # want to do
+    if args.myip == True:               # if you used -myip, then you want to upsert your internet IP as the record's value
+        value = get_my_ip()
+        action = 'UPSERT'
+    elif args.eip != None:              # if you specified an EIP, then you want to upsert the EIP as the record's value
+        value = get_ip_from_eip(args.eip)
+        action = 'UPSERT'
+    elif args.instanceid != None:       # if you specified an instance ID, then you want to upsert the instance's public IP as the record's value
+        value = get_instance_ip(args.instanceid)
+        action = 'UPSERT'
+    elif args.delete == True:
+        raise ValueError('Delete requires zone name, record name, and record type.')
+    else:                               # you gave a record zone and name but no value, so you want to describe the record
+        action = 'DESCRIBE'
 
 # figure out the record type if implied
 type = args.type
-if type == None and value != None:
+if type == None:
     if is_valid_ipv4_address(value):
         type = 'A'
     elif is_valid_ipv6_address(value):
         type = 'AAAA'
     elif is_valid_dnsname(value):
         type = 'CNAME'
-    elif action != 'list':
+    elif action != 'LIST' and action != 'LISTZONES' and action != 'DESCRIBE':
         raise ValueError('Unable to determine record type')
 
-zoneid = get_hosted_zone_id_from_name(args.zone)
-record_name = args.name + "." + args.zone
+# if it's a delete, verify value and type are present
+if args.delete == True:
+    if value == None or type == None:
+        raise ValueError('Delete requires zone name, record name, and record type.')
+    action = 'DELETE'
+
+# for actions requiring a zone, verify that the provided zone name is valid and then get the zone id
+if action == 'LIST' or action == 'DELETE' or action == 'UPSERT' or action == 'DESCRIBE':
+    if is_valid_dnsname(args.zone) == False:
+        raise ValueError('Invalid zone name: {}'.format(args.zone))
+    zoneid = get_hosted_zone_id_from_name(args.zone)
+
+# append the zone name to the record name if required
+if action == 'DELETE' or action == 'UPSERT' or action == 'DESCRIBE':
+    record_name = args.name + "." + args.zone
+
 ttl = args.ttl
 
+# for Route 53 record deletes, you have to specify everything about the record to be deleted, so we look it all up in preparation
 if action == 'DELETE':
     current_record = get_current_record(zoneid, type, record_name)
     ttl = current_record['TTL']
@@ -207,6 +236,9 @@ if action == 'DELETE':
 
 # do the thing with the stuff
 if action == 'LIST':
+    print('Action: {}, zone: {}'.format(action, zoneid))
+    list_rr(zoneid, '.')
+elif action == 'DESCRIBE':
     print('Action: {}, zone: {}, name: {}'.format(action, zoneid, record_name))
     list_rr(zoneid, record_name)
 elif action == 'LISTZONES':
@@ -215,5 +247,7 @@ elif action == 'LISTZONES':
 elif action == 'UPSERT' or action == 'DELETE':
     print('Action: {}, zone: {}, type: {}, name: {}, value: {}, ttl: {}'.format(action, zoneid, type, record_name, value, ttl))
     change_rr(action, zoneid, type, record_name, value, args.ttl)
+else:
+    raise ValueError('Invalid parameter combination and/or values.')
 
 print('Success')
