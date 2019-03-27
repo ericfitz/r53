@@ -81,7 +81,7 @@ The script tries to infer as much information as possible:
 - If a new value is provided for the record itself or for the TTL, the script attempts to upsert (add or
   update) the record.
 - Deletes explicitly require the --delete option.
-- Type is optional if the type can be cleanly inferred from the value (e.g. A, AAAA or CNAME).
+- Type is optional if the type can be cleanly inferred from the value and the value is correctly formatted (e.g. A, AAAA or CNAME).
 
 ## EXAMPLES
 
@@ -100,7 +100,7 @@ r53 --zone example.com --name test --value 1.2.3.4      # create/update an A rec
 r53 --zone example.com --name test --value ::1          # create/update an AAAA record (--type AAAA is optional
                                                           as IPv6 implies AAAA)
 r53 --zone example.com --name test --value foo.bar.com  # create/update a CNAME record (--type CNAME is optional
-                                                          as hostname implies)
+                                                          as hostname implies CNAME)
 r53 --profile profilename ...                           # use the keys and configuration from the profilename
                                                           profile in ~/.aws/credentials
 r53 --region us-east-1 ...                              # override the region specified in .aws configuration
