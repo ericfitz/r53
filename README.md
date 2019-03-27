@@ -1,3 +1,6 @@
+# R53.py - Command Line Route 53 interface with Dynamic DNS support
+
+## COMMAND LINE HELP
 ```
 usage: r53 [-h] [--profile PROFILE] [--region REGION] [--delete]
            [--list-hosted-zones] [--zone ZONE] [--name NAME]
@@ -34,25 +37,31 @@ properly configured with a credentials file containing valid AWS keys.  The scri
 profiles if you have multiple key sets configured properly.
 
 The script supports use of regional endpoints for EC2.
+```
 
-How to configure AWS:
+## SETUP
+
+1. Install and configure AWS command line interface
 You could install the AWS CLI and use "aws configure":
 https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
 or do it manually:
 Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
 Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
 
-The following AWS permissions are required; set them using IAM policy on the IAM user you're using.
+2. Permissions
+The following AWS permissions are required; set them using IAM policy on the IAM user or role you're using.
 ec2:DescribeInstances
 route53:ListHostedZones
 route53:ListResourceRecordSets
 route53:ChangeResourceRecordSets
 
-The script has only been tested using Python 3.6 and 3.7.
-
+3. Python environment
 You must install argparse and boto3 in the python environment where you're going to run the script:
 pip install argparse
 pip install boto3
+Alternatively, just pip install -r requirements.txt
+
+## USING THE SCRIPT
 
 The script tries to infer as much information as possible:
 - If no zone is specified, the script attempts to list hosted zones.
@@ -62,6 +71,9 @@ The script tries to infer as much information as possible:
 - Deletes explicitly require the --delete option.
 - Type is optional if the type can be cleanly inferred from the value (e.g. A, AAAA or CNAME).
 
+## EXAMPLES
+
+```
 r53 --help                                              # the above text
 r53                                                     # list hosted zones
 r53 --zone example.com --name test                      # display all records with name test in zone example.com
@@ -81,13 +93,15 @@ r53 --profile profilename ...                           # use the keys and confi
                                                           profile in ~/.aws/credentials
 r53 --region us-east-1 ...                              # override the region specified in .aws configuration
                                                           (where is your instance?)
+```
+
+## NOTES
 
 The script doesn't support aliases or weighting because I don't understand or use them.  It doesn't support management
 of zones because this is too rare a task for me to automate.  It doesn't support all record types that Route53 supports
 because I don't want to accidentally mess up my zone records.  It doesn't do a lot of error checking, expecting boto to
 throw useful exceptions.
 
-Troubleshooting:
-botocore InvalidClientTokenId  - this means that your credentials are wrong or missing.  Set up new a new key pair with IAM.
+## TROUBLESHOOTING
 
-```
+botocore InvalidClientTokenId  - this means that your credentials are wrong or missing.  Set up new a new key pair with IAM.
