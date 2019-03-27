@@ -42,25 +42,30 @@ The script supports use of regional endpoints for EC2.
 ## SETUP
 
 1. Install and configure AWS command line interface
-You could install the AWS CLI and use "aws configure":
-https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
-or do it manually:
-Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
-Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
+    You could install the AWS CLI and use "aws configure":
+      https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
+    or do it manually:
+      Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
+      Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
 
 2. Permissions
-The following AWS permissions are required; set them using IAM policy on the IAM user or role you're using.
-ec2:DescribeInstances
-route53:ListHostedZones
-route53:ListResourceRecordSets
-route53:ChangeResourceRecordSets
+    The following AWS permissions are required; set them using IAM policy on the IAM user or role you're using.
+    - ec2:DescribeInstances
+    - route53:ListHostedZones
+    - route53:ListResourceRecordSets
+    - route53:ChangeResourceRecordSets
 
 3. Python environment
-You must install argparse and boto3 in the python environment where you're going to run the script:
-pip install argparse
-pip install boto3
-Alternatively, just pip install -r requirements.txt
-
+    You must install argparse and boto3 in the python environment where you're going to run the script:
+    ```
+    pip install argparse
+    pip install boto3
+    ```
+    Alternatively, just 
+    ```
+    pip install -r requirements.txt
+    ```
+    
 ## USING THE SCRIPT
 
 The script tries to infer as much information as possible:
