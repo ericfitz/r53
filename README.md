@@ -45,12 +45,12 @@ optional arguments:
 
     You could install the AWS CLI and use "aws configure":
     
-      https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
+      - https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
       
     or do it manually:
     
-      Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
-      Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
+      - Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
+      - Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
 
 2. Permissions
 
