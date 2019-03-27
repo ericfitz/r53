@@ -1,5 +1,11 @@
 # R53.py - Command Line Route 53 interface with Dynamic DNS support
 
+This Python 3.7 script does simple management of Route 53 zones and records using the AWS API.  You must have the AWS CLI properly configured with a credentials file containing valid AWS keys.  The script supports use of profiles if you have multiple key sets configured properly.
+
+The script trivially does dynamic DNS using the "--myip" parameter to look up its own public IP and use it to update an A record.
+
+The script can also set an A record to an EC2 instance's public IP address, even if the instance is in a different region.
+
 ## COMMAND LINE HELP
 ```
 usage: r53 [-h] [--profile PROFILE] [--region REGION] [--delete]
@@ -31,32 +37,33 @@ optional arguments:
                         EC2 instance ID; sets value to the public IP address
                         of the instance. Type and value parameters are ignored
                         if instanceid is specified.
-                        
-This script does simple management of Route 53 zones, using the AWS API.  You must have the AWS CLI
-properly configured with a credentials file containing valid AWS keys.  The script supports use of
-profiles if you have multiple key sets configured properly.
-
-The script supports use of regional endpoints for EC2.
 ```
 
 ## SETUP
 
 1. Install and configure AWS command line interface
+
     You could install the AWS CLI and use "aws configure":
+    
       https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
+      
     or do it manually:
+    
       Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
       Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
 
 2. Permissions
+
     The following AWS permissions are required; set them using IAM policy on the IAM user or role you're using.
+    
     - ec2:DescribeInstances
     - route53:ListHostedZones
     - route53:ListResourceRecordSets
     - route53:ChangeResourceRecordSets
 
 3. Python environment
-    You must install argparse and boto3 in the python environment where you're going to run the script:
+
+    You must install argparse and boto3 in the python 3.7 environment where you're going to run the script:
     ```
     pip install argparse
     pip install boto3
