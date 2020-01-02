@@ -1,6 +1,6 @@
 # R53.py - Command Line Route 53 interface with Dynamic DNS support
 
-This Python 3.7 script does simple management of Route 53 zones and records using the AWS API.  You must have the AWS CLI properly configured with a credentials file containing valid AWS keys.  The script supports use of profiles if you have multiple key sets configured properly.
+This Python 3.7+ script does simple management of Route 53 zones and records using the AWS API.  You must have the AWS CLI properly configured with a credentials file containing valid AWS keys.  The script supports use of profiles if you have multiple key sets configured properly.
 
 The script trivially does dynamic DNS using the "--myip" parameter to look up its own public IP and use it to update an A record.
 
@@ -63,7 +63,7 @@ optional arguments:
 
 3. Python environment
 
-    You must install argparse and boto3 in the python 3.7 environment where you're going to run the script:
+    You must install argparse and boto3 in the python 3.7+ environment where you're going to run the script:
     ```
     pip install argparse
     pip install boto3
@@ -109,10 +109,9 @@ r53 --region us-east-1 ...                              # override the region sp
 
 ## NOTES
 
-The script doesn't support aliases or weighting because I don't understand or use them.  It doesn't support management
-of zones because this is too rare a task for me to automate.  It doesn't support all record types that Route53 supports
-because I don't want to accidentally mess up my zone records.  It doesn't do a lot of error checking, expecting boto to
-throw useful exceptions.
+The script doesn't support aliases or weighting.  It doesn't support management of zones.  It doesn't support
+all record types that Route53 supports.  It doesn't do a lot of error checking, expecting boto to throw useful
+exceptions.
 
 ## TROUBLESHOOTING
 
