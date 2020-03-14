@@ -41,7 +41,11 @@ optional arguments:
 
 ## SETUP
 
-1. Install and configure AWS command line interface
+1. Install the AWS command line interface (CLI)
+
+   - https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html
+
+2. Configure the AWS CLI
 
     You could install the AWS CLI and use "aws configure":
     
@@ -52,7 +56,7 @@ optional arguments:
       - Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
       - Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
 
-2. Permissions
+3. Permissions
 
     The following AWS permissions are required; set them using IAM policy on the IAM user or role you're using.
     
@@ -61,7 +65,7 @@ optional arguments:
     - route53:ListResourceRecordSets
     - route53:ChangeResourceRecordSets
 
-3. Python environment
+3. Configure your Python environment
 
     You must install argparse and boto3 in the python 3.7+ environment where you're going to run the script:
     ```
