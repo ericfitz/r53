@@ -120,3 +120,19 @@ exceptions.
 ## TROUBLESHOOTING
 
 botocore InvalidClientTokenId  - this means that your credentials are wrong or missing.  Set up new a new key pair with IAM.
+
+## DYNAMIC DNS
+
+To implement dynamic DNS without subscribing to one of the public DDNS providers:
+
+1. Register a domain (e.g. "mydomain.com") and host it with Route 53
+
+2. Configure this tool as described above in "SETUP"
+
+3. Choose a record name to use for DDNS, e.g. "home" ("home.mydomain.com").
+
+4. Configure the tool to run regularly to create and update that A record with your IP address.  Run this regularly from a computer behind that IP address, e.g. on a home server using a CRON job.
+
+```
+r53 --zone example.com --name home --myip
+```
