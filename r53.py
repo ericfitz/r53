@@ -60,15 +60,23 @@ def is_valid_dns_name(p_dns_name):
         if p_dns_name[-1] == ".":
             p_dns_name = p_dns_name[:-1]  # strip exactly one dot from the right, if present
         # noinspection PyPep8
-        allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
+        allowed = re.compile(
+            "^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
+(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
+            re.IGNORECASE)
     except TypeError:
         return False
-    return all(allowed.match(x) for x in p_dns_name.split("."))
+    validated_dns_name = allowed.match(p_dns_name)
+    print("Validated DNS name: {}", validated_dns_name)
+    return validated_dns_name
 
 
 def is_valid_hostname(hostname):
     # noinspection PyPep8
-    allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
+    allowed = re.compile(
+        "^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
+(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
+        re.IGNORECASE)
     return allowed.match(hostname)
 
 
@@ -78,8 +86,8 @@ def get_hosted_zone_id_from_name(p_domain_name):
     for response in response_iterator:
         zones = response['HostedZones']
         for zone in zones:
-            l_zone_id = (zone['Id'].split("/")[-1:])[
-                0]  # split by / into a list of strings, get list of last string only, convert list to string
+            l_zone_id = (zone['Id'].split("/")[-1:])[0]
+            # split by / into a list of strings, get list of last string only, convert list to string
             zone_name = zone['Name'].rstrip(".")  # remove trailing .
             if zone_name == p_domain_name:
                 return l_zone_id
@@ -240,15 +248,20 @@ if args.delete:
         raise ValueError('Delete requires zone name, record name, and record type.')
     action = 'DELETE'
 
+zone_id = ""
+record_id = ""
+
 # for actions requiring a zone, verify that the provided zone name is valid and then get the zone id
 if action == 'LIST' or action == 'DELETE' or action == 'UPSERT' or action == 'DESCRIBE':
-    if not is_valid_dns_name(args.zone):
+    if is_valid_dns_name(args.zone) is False:
         raise ValueError('Invalid zone name: {}'.format(args.zone))
     zone_id = get_hosted_zone_id_from_name(args.zone)
 
+record_name = ""
+
 # append the zone name to the record name if required
 if action == 'DELETE' or action == 'UPSERT' or action == 'DESCRIBE':
-    record_name = args.name + "." + args.zone
+    record_name = str(args.name) + "." + str(args.zone)
 
 ttl = args.ttl
 
@@ -263,15 +276,15 @@ if action == 'DELETE':
         exit(1)
 
 # do the thing with the stuff
-if action == 'LIST':
+if action == 'LISTZONES':
+    print('Action: {}'.format(action))
+    list_hosted_zones()
+elif action == 'LIST':
     print('Action: {}, zone: {}'.format(action, zone_id))
     list_rr(zone_id, '.')
 elif action == 'DESCRIBE':
     print('Action: {}, zone: {}, name: {}'.format(action, zone_id, record_name))
     list_rr(zone_id, record_name)
-elif action == 'LISTZONES':
-    print('Action: {}'.format(action))
-    list_hosted_zones()
 elif action == 'UPSERT' or action == 'DELETE':
     print(
         'Action: {}, zone: {}, type: {}, name: {}, value: {}, ttl: {}'.format(action, zone_id, record_type, record_name,
@@ -279,6 +292,6 @@ elif action == 'UPSERT' or action == 'DELETE':
                                                                               ttl))
     change_rr(action, zone_id, record_type, record_name, value, args.ttl)
 else:
-    raise ValueError('Invalid parameter combination and/or values.') # we should never get here
+    raise ValueError('Invalid parameter combination and/or values.')  # we should never get here
 
 print('Success')
