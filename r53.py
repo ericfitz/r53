@@ -64,7 +64,7 @@ def is_valid_dns_name(p_dns_name):
             ]  # strip exactly one dot from the right, if present
         # noinspection PyPep8
         allowed = re.compile(
-            "^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
+            r"^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
 (\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
             re.IGNORECASE,
         )
@@ -78,7 +78,7 @@ def is_valid_dns_name(p_dns_name):
 def is_valid_hostname(hostname):
     # noinspection PyPep8
     allowed = re.compile(
-        "^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
+        r"^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
 (\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
         re.IGNORECASE,
     )
@@ -148,7 +148,9 @@ def list_rr(p_zone_id, p_record_name):
                             rrset_name, rrset["Type"], rrset["TTL"], rr["Value"]
                         )
                     )
-            except KeyError:  # A records for ELB have an odd format, just print the JSON for them
+            except (
+                KeyError
+            ):  # A records for ELB have an odd format, just print the JSON for them
                 print(rrset)
     return
 
@@ -207,7 +209,9 @@ parser.add_argument(
 parser.add_argument(
     "--ttl", action="store", type=int, default=300, help="TTL (in seconds)"
 )
-parser.add_argument("--value", action="store", help="Specifies the value to set in the resource record")
+parser.add_argument(
+    "--value", action="store", help="Specifies the value to set in the resource record"
+)
 parser.add_argument(
     "--eip",
     action="store",
@@ -216,7 +220,7 @@ parser.add_argument(
 parser.add_argument(
     "--myip",
     action="store_true",
-    help="Uses the calling computer\'s public IP address. Type and value parameters are ignored if --myip is specified.",
+    help="Uses the calling computer's public IP address. Type and value parameters are ignored if --myip is specified.",
 )
 # noinspection SpellCheckingInspection,SpellCheckingInspection
 parser.add_argument(
