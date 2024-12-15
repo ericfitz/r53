@@ -116,7 +116,6 @@ def is_valid_dns_name(p_dns_name):
     except TypeError:
         return False
     validated_dns_name = allowed.match(p_dns_name)
-    print("Validated DNS name: {}", validated_dns_name)
     return validated_dns_name
 
 
@@ -345,9 +344,10 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-print(args)  # for debugging
+print("Arguments: " + str(args))  # for debugging
 
 if args.profile is not None:
+    # print("Using profile: " + args.profile)
     boto3.setup_default_session(profile_name=args.profile)
 
 # AWS Route 53 is global, not regional, so we can ignore region for Route 53 connection.
@@ -355,6 +355,7 @@ route53 = boto3.client("route53")
 
 # However EC2 is regional, so we need to use region if specified
 if args.region is not None:
+    # print("Using region: " + args.region)
     ec2 = boto3.client("ec2", region_name=args.region)
 else:
     ec2 = boto3.client("ec2")
@@ -362,41 +363,38 @@ else:
 # we're going to infer the desired action from the parameters provided
 action = "ERROR"  # assume that the parameter combination is erroneous until we find a valid combination
 
+if args.delete:
+    action = "DELETE"
+
 if args.zone is None:
     action = "LISTZONES"  # we need a zone name for almost everything.  No zone name -> list zones
-elif (
-    args.name is None
-):  # we need a record name for any record manipulation.  No record name -> list records in zone
-    action = "LIST"
+    if args.name is None:  # we need a record name for any record manipulation.  No record name -> list records in zone
+        action = "LIST"
+elif args.name is None:
+        raise ValueError("You must specify both a zone and a record name for record operations")
 
-# figure out the action to set
 value = args.value
 
 # figure out the action if no value is specified
-if (
-    value is None and action == "ERROR"
-):  # we don't know the action yet, so you must want to manipulate a record
-    # but if you didn't give us a value, then we have to figure out what you
-    # want to do
-    if (
-        args.myip
-    ):  # if you used -myip, then you want to upsert your internet IP as the record's value
-        value = get_my_ip()
+if (action != "LISTZONES" and action != "LIST" and action != "DELETE"):
+    if args.value is None:
+        if args.myip:  # if you used -myip, then you want to upsert your internet IP as the record's value
+            value = get_my_ip()
+            print("Calculated value: {}".format(value))
+            action = "UPSERT"
+        elif args.eip is not None:  # if you specified an EIP, then you want to upsert the EIP as the record's value
+            value = get_ip_from_eip(args.eip)
+            print("Calculated value: {}".format(value))
+            action = "UPSERT"
+        elif args.instanceid is not None:  # if you specified an instance ID, then you want to upsert the instance's public IP as the record's value
+            value = get_instance_ip(args.instanceid)
+            print("Calculated value: {}".format(value))
+            action = "UPSERT"
+        else:  # you gave a record zone and name but no value, so you want to describe the record
+            action = "DESCRIBE"
+    else:
         action = "UPSERT"
-    elif (
-        args.eip is not None
-    ):  # if you specified an EIP, then you want to upsert the EIP as the record's value
-        value = get_ip_from_eip(args.eip)
-        action = "UPSERT"
-    elif (
-        args.instanceid is not None
-    ):  # if you specified an instance ID, then you want to upsert the instance's public IP as the record's value
-        value = get_instance_ip(args.instanceid)
-        action = "UPSERT"
-    elif args.delete:
-        raise ValueError("Delete requires zone name, record name, and record type.")
-    else:  # you gave a record zone and name but no value, so you want to describe the record
-        action = "DESCRIBE"
+    print("Inferred action: {}".format(action))
 
 record_type = args.type
 
@@ -410,38 +408,37 @@ if record_type is None:
         record_type = "CNAME"
     elif action != "LIST" and action != "LISTZONES" and action != "DESCRIBE":
         raise ValueError("Unable to determine record type")
-
-# if it's a delete, verify value and type are present
-if args.delete:
-    if value is None or record_type is None:
-        raise ValueError("Delete requires zone name, record name, and record type.")
-    action = "DELETE"
+    print("Inferred record type: {}".format(record_type))
 
 zone_id = ""
-record_id = ""
 
 # for actions requiring a zone, verify that the provided zone name is valid and then get the zone id
 if action == "LIST" or action == "DELETE" or action == "UPSERT" or action == "DESCRIBE":
     if is_valid_dns_name(args.zone) is False:
         raise ValueError("Invalid zone name: {}".format(args.zone))
     zone_id = get_hosted_zone_id_from_name(args.zone)
+    print("Zone ID: {}".format(zone_id))
 
 record_name = ""
 
 # append the zone name to the record name if required
 if action == "DELETE" or action == "UPSERT" or action == "DESCRIBE":
     record_name = str(args.name) + "." + str(args.zone)
+    print("Record name: {}".format(record_name))
 
 ttl = args.ttl
 
 # for Route 53 record deletes, you have to specify everything about the record to be deleted, so we look it all up in preparation
 if action == "DELETE":
+    if record_type is None:
+        raise ValueError("Must specify record type for deletes")
     try:
         current_record = get_current_record(zone_id, record_name)
         ttl = current_record["TTL"]
         value = current_record["Value"]
-    except KeyError:
-        print("Record does not exist.")
+        print("Validated current record exists before delete")
+    except KeyError: # trying to delete nonexistent record
+        print("Cannot delete nonexistent record.")
         exit(1)
 
 # we've verified that we have a valid action and all necessary parameters, so let's do it
