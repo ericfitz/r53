@@ -43,7 +43,7 @@ def is_valid_ipv4_address(address):
     """
     Validate an IP address.
 
-    Given a string, this function checks if that string is a valid IPv4 address.
+    Given a string, this function checks if that string is a valid IPv4 address in dotted quad format.
 
     :param address: a string to be validated as an IPv4 address
     :return: True if the address is valid, False otherwise
@@ -55,9 +55,13 @@ def is_valid_ipv4_address(address):
             socket.inet_aton(address)
         except socket.error:
             return False
+        # https://www.oreilly.com/library/view/regular-expressions-cookbook/9780596802837/ch07s16.html
+        re_ipv4 = re.compile(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
+        is_ipv4 = (address == re_ipv4.match(address))
         return (
-            address.count(".") == 3
-        )  # ensure that the address was complete and not padded with 0's by the socket library
+            is_ipv4
+            #address.count(".") == 3 # the old way was just counting the dots
+        )
     except socket.error:  # not a valid address
         return False
     except TypeError:
@@ -107,7 +111,7 @@ def is_valid_dns_name(p_dns_name):
         allowed = re.compile(
             r"^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
 (\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
-            re.IGNORECASE,
+            re.IGNORECASE
         )
     except TypeError:
         return False
