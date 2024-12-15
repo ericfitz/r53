@@ -349,6 +349,7 @@ if args.profile is not None:
 # AWS Route 53 is global, not regional, so we can ignore region for Route 53 connection.
 route53 = boto3.client("route53")
 
+# However EC2 is regional, so we need to use region if specified
 if args.region is not None:
     ec2 = boto3.client("ec2", region_name=args.region)
 else:
@@ -393,8 +394,9 @@ if (
     else:  # you gave a record zone and name but no value, so you want to describe the record
         action = "DESCRIBE"
 
-# figure out the record type if implied
 record_type = args.type
+
+# figure out the record type if not explicitly specified
 if record_type is None:
     if is_valid_ipv4_address(value):
         record_type = "A"
@@ -438,7 +440,7 @@ if action == "DELETE":
         print("Record does not exist.")
         exit(1)
 
-# do the thing with the stuff
+# we've verified that we have a valid action and all necessary parameters, so let's do it
 if action == "LISTZONES":
     print("Action: {}".format(action))
     list_hosted_zones()
@@ -458,6 +460,6 @@ elif action == "UPSERT" or action == "DELETE":
 else:
     raise ValueError(
         "Invalid parameter combination and/or values."
-    )  # we should never get here
+    )  # if we got here, there was a bug in the parameter validation code above
 
 print("Success")
