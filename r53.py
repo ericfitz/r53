@@ -7,6 +7,9 @@ import re
 
 
 def get_instance_ip(instance_id):
+    """
+    Given an instance id, returns the public IP address of that instance.
+    """
     response = ec2.describe_instances(InstanceIds=[instance_id])
     for r in response["Reservations"]:
         for i in r["Instances"]:
@@ -14,18 +17,37 @@ def get_instance_ip(instance_id):
 
 
 def get_ip_from_eip(eip):
+    """
+    Given an Elastic IP Allocation Id, returns the public IP address of that Elastic IP address.
+    """
     response = ec2.describe_addresses(AllocationIds=[eip])
     for a in response["Addresses"]:
         return a["PublicIp"]
 
 
 def get_my_ip():
+    """
+    Get the public IP address of the host running this script.
+
+    The value is obtained from AWS's public IP address service.
+
+    Returns:
+        str: the public IP address of this host.
+    """
     with request.urlopen("https://checkip.amazonaws.com") as f:
         return f.read().decode("utf-8").strip()
 
 
 # https://stackoverflow.com/questions/319279/how-to-validate-ip-address-in-python
 def is_valid_ipv4_address(address):
+    """
+    Validate an IP address.
+
+    Given a string, this function checks if that string is a valid IPv4 address.
+
+    :param address: a string to be validated as an IPv4 address
+    :return: True if the address is valid, False otherwise
+    """
     try:
         socket.inet_pton(socket.AF_INET, address)
     except AttributeError:  # no inet_pton here, sorry
@@ -44,6 +66,14 @@ def is_valid_ipv4_address(address):
 
 
 def is_valid_ipv6_address(address):
+    """
+    Validate an IPv6 address.
+
+    Given a string, this function checks if that string is a valid IPv6 address.
+
+    :param address: A string to be validated as an IPv6 address
+    :return: True if the address is valid, False otherwise
+    """
     try:
         socket.inet_pton(socket.AF_INET6, address)
     except socket.error:  # not a valid address
@@ -55,6 +85,17 @@ def is_valid_ipv6_address(address):
 
 # https://stackoverflow.com/questions/2532053/validate-a-hostname-string
 def is_valid_dns_name(p_dns_name):
+    """
+    Validate a DNS name.
+
+    Given a string, this function checks if that string is a valid DNS name.
+    A valid DNS name must be 255 characters or fewer, and each label within
+    the name must be 63 characters or fewer. The function also allows for
+    the presence of a trailing dot, which is stripped before validation.
+
+    :param p_dns_name: A string to be validated as a DNS name
+    :return: True if the DNS name is valid, False otherwise
+    """
     try:
         if len(p_dns_name) > 255:
             return False
@@ -77,6 +118,18 @@ def is_valid_dns_name(p_dns_name):
 
 def is_valid_hostname(hostname):
     # noinspection PyPep8
+    """
+    Validate a hostname.
+
+    Given a string, this function checks if that string is a valid hostname.
+    A valid hostname must consist of one or more labels separated by periods,
+    where each label may contain alphanumeric characters and hyphens, but must
+    not start or end with a hyphen. Each label must be between 1 and 63 characters,
+    and the entire hostname must not exceed 255 characters.
+
+    :param hostname: A string to be validated as a hostname
+    :return: A match object if the hostname is valid, None otherwise
+    """
     allowed = re.compile(
         r"^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
 (\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
@@ -86,6 +139,16 @@ def is_valid_hostname(hostname):
 
 
 def get_hosted_zone_id_from_name(p_domain_name):
+    """
+    Retrieve the hosted zone ID for a given domain name.
+
+    This function iterates over all hosted zones in Route 53 and compares their
+    names to the provided domain name. If a match is found, it returns the
+    corresponding hosted zone ID. If no match is found, it returns None.
+
+    :param p_domain_name: The domain name to search for in Route 53 hosted zones.
+    :return: The hosted zone ID if found, otherwise None.
+    """
     paginator = route53.get_paginator("list_hosted_zones")
     response_iterator = paginator.paginate()
     for response in response_iterator:
@@ -100,6 +163,14 @@ def get_hosted_zone_id_from_name(p_domain_name):
 
 
 def list_hosted_zones():
+    """
+    List all hosted zones in Route 53.
+
+    This function iterates over all hosted zones in Route 53 and prints out each
+    zone's ID and name.
+
+    :return: None
+    """
     paginator = route53.get_paginator("list_hosted_zones")
     response_iterator = paginator.paginate()
     for response in response_iterator:
@@ -112,6 +183,17 @@ def list_hosted_zones():
 
 
 def get_current_record(p_zone_id, p_record_name):
+    """
+    Retrieve the current record details for a given record name in a specified hosted zone.
+
+    This function uses the AWS Route 53 API to paginate through resource record sets
+    within a specified hosted zone. It searches for a record set that matches the given
+    record name and returns its details, including name, type, TTL, and value.
+
+    :param p_zone_id: The ID of the hosted zone to search in.
+    :param p_record_name: The name of the record to retrieve details for.
+    :return: A dictionary containing the record details if found, otherwise an empty dictionary.
+    """
     result = {}
     paginator = route53.get_paginator("list_resource_record_sets")
     response_iterator = paginator.paginate(
@@ -132,6 +214,18 @@ def get_current_record(p_zone_id, p_record_name):
 
 
 def list_rr(p_zone_id, p_record_name):
+    """
+    List resource record sets for a specific record name within a given hosted zone.
+
+    This function uses the AWS Route 53 API to paginate through resource record sets
+    in a specified hosted zone, starting from a given record name. It prints the
+    details of each record set, including the name, type, TTL, and value. If a record
+    set has an unexpected format, it prints the JSON representation of the record set.
+
+    :param p_zone_id: The ID of the hosted zone to search in.
+    :param p_record_name: The name of the record to start listing from.
+    :return: None
+    """
     paginator = route53.get_paginator("list_resource_record_sets")
     response_iterator = paginator.paginate(
         HostedZoneId=p_zone_id, StartRecordName=p_record_name
@@ -156,6 +250,23 @@ def list_rr(p_zone_id, p_record_name):
 
 
 def change_rr(p_action, p_zone_id, p_record_type, p_record_name, p_value, p_ttl):
+    """
+    Update a resource record set in a specified hosted zone.
+
+    This function uses the AWS Route 53 API to update a resource record set in a
+    specified hosted zone. The function takes in parameters for the action to
+    perform (CREATE, UPDATE, DELETE), the ID of the hosted zone, the type of the
+    record, the name of the record, the new value of the record, and the TTL of
+    the record. It returns the response from the AWS API.
+
+    :param p_action: The action to perform (CREATE, UPDATE, DELETE)
+    :param p_zone_id: The ID of the hosted zone to update
+    :param p_record_type: The type of the record to update (A, AAAA, MX, etc.)
+    :param p_record_name: The name of the record to update
+    :param p_value: The new value of the record
+    :param p_ttl: The TTL of the record
+    :return: The response from the AWS API
+    """
     response = route53.change_resource_record_sets(
         HostedZoneId=p_zone_id,
         ChangeBatch={
