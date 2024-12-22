@@ -10,6 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 
+
 def get_instance_ip(instance_id):
     """
     Given an instance id, returns the public IP address of that instance.
@@ -52,6 +53,7 @@ def get_my_ip():
         return f.read().decode("utf-8").strip()
     # todo: error handling
 
+
 # https://stackoverflow.com/questions/319279/how-to-validate-ip-address-in-python
 def is_valid_ipv4_address(address):
     """
@@ -74,9 +76,7 @@ def is_valid_ipv4_address(address):
             r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
         )
         is_ipv4 = address == re_ipv4.match(address)
-        return (
-            is_ipv4
-        )
+        return is_ipv4
     except socket.error:  # not a valid address
         return False
     except TypeError:
@@ -393,7 +393,9 @@ if args.profile is not None:
     try:
         boto3.setup_default_session(profile_name=args.profile)
     except Exception as e:
-        logger.error(f"Boto error {e} creating session using specified profile {args.profile}")
+        logger.error(
+            f"Boto error {e} creating session using specified profile {args.profile}"
+        )
         exit(1)
 
 # AWS Route 53 is global, not regional, so we can ignore region for Route 53 connection.
@@ -409,7 +411,9 @@ if args.region is not None:
     try:
         ec2 = boto3.client("ec2", region_name=args.region)
     except Exception as e:
-        logger.error(f"Boto error {e} creating EC2 client in specified region {args.region}")
+        logger.error(
+            f"Boto error {e} creating EC2 client in specified region {args.region}"
+        )
         exit(1)
 else:
     try:
@@ -496,7 +500,9 @@ else:
                 action = "UPSERT"
 
 if action is None:
-    raise ValueError("Invalid parameter combination and/or values")  # if we got here, there was a bug in the parameter validation code above
+    raise ValueError(
+        "Invalid parameter combination and/or values"
+    )  # if we got here, there was a bug in the parameter validation code above
 else:
     logger.info("Inferred action: {}".format(action))
 
@@ -509,17 +515,19 @@ match action:
         logger.debug(f"Executing action: action:{action} zoneid:{zone_id}")
         list_rr(zone_id, ".")
     case "DESCRIBE":
-        logger.debug(f"Executing action: action:{action} zoneid:{zone_id} recordname:{record_name}")
+        logger.debug(
+            f"Executing action: action:{action} zoneid:{zone_id} recordname:{record_name}"
+        )
         list_rr(zone_id, record_name)
     case "UPSERT":
         logger.debug(
-            f"Executing action: action:{action} zoneid:{zone_id} recordname:{record_name} value:{value} ttl:{ttl}" # type: ignore
-            )
+            f"Executing action: action:{action} zoneid:{zone_id} recordname:{record_name} value:{value} ttl:{ttl}"  # type: ignore
+        )
         change_rr(action, zone_id, record_type, record_name, value, args.ttl)
     case "DELETE":
         logger.debug(
-            f"Executing action: action:{action} zoneid:{zone_id} recordname:{record_name} value:{value} ttl:{ttl}" # type: ignore
-            )
+            f"Executing action: action:{action} zoneid:{zone_id} recordname:{record_name} value:{value} ttl:{ttl}"  # type: ignore
+        )
         current_record = get_current_record(zone_id, record_name)
         ttl = current_record["TTL"]
         value = current_record["Value"]
