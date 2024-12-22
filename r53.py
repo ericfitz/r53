@@ -312,7 +312,9 @@ def list_rr(p_zone_id, p_record_name):
                     rrs = rrset["ResourceRecords"]
                     for rr in rrs:
                         print(
-                            f"Name: {rrset_name}, Type: {rrset["Type"]}, TTL: {rrset["TTL"]}, Value: {rr["Value"]}"
+                            "Name: {}, Type: {}, TTL: {}, Value: {}".format(
+                                rrset_name, rrset["Type"], rrset["TTL"], rr["Value"]
+                            )
                         )
                 except (
                     KeyError
