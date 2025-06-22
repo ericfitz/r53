@@ -1,12 +1,13 @@
 # R53.py - Command Line Route 53 interface with Dynamic DNS support
 
-This Python 3.7+ script does simple management of Route 53 zones and records using the AWS API.  You must have the AWS CLI properly configured with a credentials file containing valid AWS keys.  The script supports use of profiles if you have multiple key sets configured properly.
+This Python 3.7+ script does simple management of Route 53 zones and records using the AWS API. You must have the AWS CLI properly configured with a credentials file containing valid AWS keys. The script supports use of profiles if you have multiple key sets configured properly.
 
 The script trivially does dynamic DNS using the "--myip" parameter to look up its own public IP and use it to update an A record.
 
 The script can also set an A record to an EC2 instance's public IP address, even if the instance is in a different region.
 
 ## COMMAND LINE HELP
+
 ```
 usage: r53 [-h] [--profile PROFILE] [--region REGION] [--delete]
            [--list-hosted-zones] [--zone ZONE] [--name NAME]
@@ -47,39 +48,43 @@ optional arguments:
 
 2. Configure the AWS CLI
 
-    You could install the AWS CLI and use "aws configure":
-    
-      - https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
-      
-    or do it manually:
-    
-      - Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
-      - Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
+   You could install the AWS CLI and use "aws configure":
+
+   - https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
+
+   or do it manually:
+
+   - Credentials & configuration: https://docs.aws.amazon.com/cli/latest/userguide/cli-config-files.html
+   - Profiles: https://docs.aws.amazon.com/cli/latest/userguide/cli-multiple-profiles.html
 
 3. Permissions
 
-    The following AWS permissions are required; set them using IAM policy on the IAM user or role you're using.
-    
-    - ec2:DescribeInstances
-    - route53:ListHostedZones
-    - route53:ListResourceRecordSets
-    - route53:ChangeResourceRecordSets
+   The following AWS permissions are required; set them using IAM policy on the IAM user or role you're using.
 
-3. Configure your Python environment
+   - ec2:DescribeInstances
+   - route53:ListHostedZones
+   - route53:ListResourceRecordSets
+   - route53:ChangeResourceRecordSets
 
-    You must install argparse and boto3 in the python 3.7+ environment where you're going to run the script:
-    ```
-    pip install argparse
-    pip install boto3
-    ```
-    Alternatively, just 
-    ```
-    pip install -r requirements.txt
-    ```
-    
+4. Configure your Python environment
+
+   You must install argparse and boto3 in the python 3.7+ environment where you're going to run the script:
+
+   ```
+   pip install argparse
+   pip install boto3
+   ```
+
+   Alternatively, use Poetry to install dependencies:
+
+   ```
+   poetry install
+   ```
+
 ## USING THE SCRIPT
 
 The script tries to infer as much information as possible:
+
 - If no zone is specified, the script attempts to list hosted zones.
 - If only a zone and a record name are specified, the script attempts to look up and display matching records.
 - If a new value is provided for the record itself or for the TTL, the script attempts to upsert (add or
@@ -113,13 +118,13 @@ r53 --region us-east-1 ...                              # override the region sp
 
 ## NOTES
 
-The script doesn't support aliases or weighting.  It doesn't support management of zones.  It doesn't support
-all record types that Route53 supports.  It doesn't do a lot of error checking, expecting boto to throw useful
+The script doesn't support aliases or weighting. It doesn't support management of zones. It doesn't support
+all record types that Route53 supports. It doesn't do a lot of error checking, expecting boto to throw useful
 exceptions.
 
 ## TROUBLESHOOTING
 
-botocore InvalidClientTokenId  - this means that your credentials are wrong or missing.  Set up new a new key pair with IAM.
+botocore InvalidClientTokenId - this means that your credentials are wrong or missing. Set up new a new key pair with IAM.
 
 ## DYNAMIC DNS
 
@@ -131,7 +136,7 @@ To implement dynamic DNS without subscribing to one of the public DDNS providers
 
 3. Choose a record name to use for DDNS, e.g. "home" ("home.mydomain.com").
 
-4. Configure the tool to run regularly to create and update that A record with your IP address.  Run this regularly from a computer behind that IP address, e.g. on a home server using a CRON job.
+4. Configure the tool to run regularly to create and update that A record with your IP address. Run this regularly from a computer behind that IP address, e.g. on a home server using a CRON job.
 
 ```
 r53 --zone example.com --name home --myip
