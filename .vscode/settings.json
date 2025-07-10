@@ -1,3 +1,4 @@
 {
-  "trunk.addToolsToPath": true
+  "trunk.addToolsToPath": true,
+  "python.analysis.autoImportCompletions": true
 }

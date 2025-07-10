@@ -1,6 +1,6 @@
 # R53.py - Command Line Route 53 interface with Dynamic DNS support
 
-This Python 3.7+ script does simple management of Route 53 zones and records using the AWS API. You must have the AWS CLI properly configured with a credentials file containing valid AWS keys. The script supports use of profiles if you have multiple key sets configured properly.
+This Python 3.10+ script does simple management of Route 53 zones and records using the AWS API. You must have the AWS CLI properly configured with a credentials file containing valid AWS keys. The script supports use of profiles if you have multiple key sets configured properly.
 
 The script trivially does dynamic DNS using the "--myip" parameter to look up its own public IP and use it to update an A record.
 

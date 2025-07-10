@@ -1,6 +1,6 @@
 [project]
 name = "r53"
-version = "0.1.0"
+version = "1.0.0"
 description = "Command line tool to manage AWS Route53"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -31,7 +31,6 @@ Usage:
 
 Author:
     Eric Fitzgerald (https://github.com/ericfitz)
-
 """
 
 import argparse
@@ -40,6 +39,7 @@ import socket
 from urllib import request, error
 import sys
 import logging
+from botocore.exceptions import ClientError
 import boto3
 
 # set up logging
@@ -53,7 +53,7 @@ def get_instance_ip(instance_id):
     """
     try:
         response = ec2.describe_instances(InstanceIds=[instance_id])
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error("AWS ec2-describe-instances error: %s", e)
         sys.exit()
     # return the first public IP address found
@@ -68,7 +68,7 @@ def get_ip_from_eip(eip_allocation_id):
     """
     try:
         response = ec2.describe_addresses(AllocationIds=[eip_allocation_id])
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error("AWS ec2-describe-addresses error: %s", e)
         sys.exit()
     # return the first public IP address found
@@ -221,7 +221,7 @@ def get_hosted_zone_id_from_name(p_domain_name):
                 if current_zone_name == p_domain_name:
                     return l_zone_id
         return None
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error("AWS route53-list-hosted-zones error: %s", e)
         sys.exit()
 
@@ -245,7 +245,7 @@ def list_hosted_zones():
                 l_zone_name = zone["Name"].rstrip(".")
                 print(l_zone_id, l_zone_name)
         return None
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error("AWS route53-list-hosted-zones error: %s", e)
         sys.exit()
 
@@ -280,7 +280,7 @@ def get_current_record(p_zone_id, p_record_name):
                         result["Type"] = rrset["Type"]
                         result["TTL"] = rrset["TTL"]
                         result["Value"] = rr["Value"]
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error("AWS route53-list-resource-record-sets error: %s", e)
         sys.exit()
     return result
@@ -322,7 +322,7 @@ def list_rr(p_zone_id, p_record_name):
                     logger.error(
                         "AWS route53-get-record-set returned unexpected json %s", rrset
                     )
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error("AWS route53-list-resource-record-sets error: %s", e)
         sys.exit()
     return None
@@ -366,7 +366,7 @@ def change_rr(p_action, p_zone_id, p_record_type, p_record_name, p_value, p_ttl)
                 ],
             },
         )
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error("AWS route53-change-resource-record-sets error: %s", e)
         sys.exit()
     return response
@@ -436,7 +436,7 @@ if args.profile is not None:
     logger.info("Using AWS profile: %s", args.profile)
     try:
         boto3.setup_default_session(profile_name=args.profile)
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error(
             "Boto error %s creating session using specified profile %s", e, args.profile
         )
@@ -445,7 +445,7 @@ if args.profile is not None:
 # AWS Route 53 is global, not regional, so we can ignore region for Route 53 connection.
 try:
     route53 = boto3.client("route53")
-except boto3.exceptions.Boto3Error as e:
+except ClientError as e:
     logger.error("Boto error %s creating Route 53 client", e)
     sys.exit()
 
@@ -455,7 +455,7 @@ if args.region is not None:
     logger.info("Using AWS region: %s", args.region)
     try:
         ec2 = boto3.client("ec2", region_name=args.region)
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error(
             "Boto error %s creating EC2 client in specified region %s", e, args.region
         )
@@ -463,7 +463,7 @@ if args.region is not None:
 else:
     try:
         ec2 = boto3.client("ec2")
-    except boto3.exceptions.Boto3Error as e:
+    except ClientError as e:
         logger.error("Boto error %s creating EC2 client in default region", e)
         sys.exit()
 
