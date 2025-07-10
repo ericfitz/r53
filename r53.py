@@ -19,6 +19,7 @@ Features:
 
 Dependencies:
 - boto3: AWS SDK for Python
+- botocore: dependency of boto3
 - argparse: For parsing command-line arguments
 - re: Regular expressions for pattern matching
 - socket: For network-related operations
@@ -162,7 +163,6 @@ def is_valid_dns_name(p_dns_name):
             p_dns_name = p_dns_name[
                 :-1
             ]  # strip exactly one dot from the right, if present
-        # noinspection PyPep8
         allowed = re.compile(
             r"^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
 (\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
@@ -175,7 +175,6 @@ def is_valid_dns_name(p_dns_name):
 
 
 def is_valid_hostname(hostname):
-    # noinspection PyPep8
     """
     Validate a hostname.
 
