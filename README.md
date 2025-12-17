@@ -66,19 +66,27 @@ optional arguments:
    - route53:ListResourceRecordSets
    - route53:ChangeResourceRecordSets
 
-4. Configure your Python environment
+4. Install uv (recommended) or configure your Python environment
 
-   You must install argparse and boto3 in the python 3.7+ environment where you're going to run the script:
+   **Option A: Using uv (recommended)**
 
+   Install uv if you haven't already:
    ```
-   pip install argparse
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+   Or on macOS with Homebrew:
+   ```
+   brew install uv
+   ```
+
+   No additional setup needed! uv will automatically manage dependencies when you run the script.
+
+   **Option B: Manual Python environment**
+
+   Install boto3 in your Python 3.10+ environment:
+   ```
    pip install boto3
-   ```
-
-   Alternatively, use Poetry to install dependencies:
-
-   ```
-   poetry install
    ```
 
 ## USING THE SCRIPT
@@ -94,33 +102,42 @@ The script tries to infer as much information as possible:
 
 ## EXAMPLES
 
+**Using uv (recommended):**
+```bash
+uv run r53.py --help                                              # the above text
+uv run r53.py                                                     # list hosted zones
+uv run r53.py --zone example.com --name test                      # display all records with name test in zone example.com
+uv run r53.py --zone example.com --name test --type A --delete    # type is required for delete
+uv run r53.py --zone example.com --name test --myip               # create/update an A record named test using your ip
+                                                                    (i.e. dynamic DNS)
+uv run r53.py --zone example.com --name test --eip <eip-id>       # create/update an A record for an EIP
+uv run r53.py --zone example.com --name test --instanceid i-123   # create/update an A record for the public IP addr of
+                                                                    an instance
+uv run r53.py --zone example.com --name test --value 1.2.3.4      # create/update an A record (--type A is optional as
+                                                                    IPv4 implies A)
+uv run r53.py --zone example.com --name test --value ::1          # create/update an AAAA record (--type AAAA is optional
+                                                                    as IPv6 implies AAAA)
+uv run r53.py --zone example.com --name test --value foo.bar.com  # create/update a CNAME record (--type CNAME is optional
+                                                                    as hostname implies CNAME)
+uv run r53.py --profile profilename ...                           # use the keys and configuration from the profilename
+                                                                    profile in ~/.aws/credentials
+uv run r53.py --region us-east-1 ...                              # override the region specified in .aws configuration
+                                                                    (where is your instance?)
 ```
-r53 --help                                              # the above text
-r53                                                     # list hosted zones
-r53 --zone example.com --name test                      # display all records with name test in zone example.com
-r53 --zone example.com --name test --type A --delete    # type is required for delete
-r53 --zone example.com --name test --myip               # create/update an A record named test using your ip
-                                                          (i.e. dynamic DNS)
-r53 --zone example.com --name test --eip <eip-id>       # create/update an A record for an EIP
-r53 --zone example.com --name test --instanceid i-123   # create/update an A record for the public IP addr of
-                                                          an instance
-r53 --zone example.com --name test --value 1.2.3.4      # create/update an A record (--type A is optional as
-                                                          IPv4 implies A)
-r53 --zone example.com --name test --value ::1          # create/update an AAAA record (--type AAAA is optional
-                                                          as IPv6 implies AAAA)
-r53 --zone example.com --name test --value foo.bar.com  # create/update a CNAME record (--type CNAME is optional
-                                                          as hostname implies CNAME)
-r53 --profile profilename ...                           # use the keys and configuration from the profilename
-                                                          profile in ~/.aws/credentials
-r53 --region us-east-1 ...                              # override the region specified in .aws configuration
-                                                          (where is your instance?)
+
+**Or using python directly (if you installed dependencies manually):**
+```bash
+python r53.py --help
+python r53.py --zone example.com --name test --myip
+# ... etc
 ```
 
 ## NOTES
 
-The script doesn't support aliases or weighting. It doesn't support management of zones. It doesn't support
-all record types that Route53 supports. It doesn't do a lot of error checking, expecting boto to throw useful
-exceptions.
+The script doesn't support aliases, weighted routing, or routing policies. Alias records
+can be listed but cannot be created, modified, or deleted. Multi-value records can be
+viewed but cannot be deleted. It doesn't support management of zones. It doesn't support
+all record types that Route53 supports.
 
 ## TROUBLESHOOTING
 
@@ -138,6 +155,11 @@ To implement dynamic DNS without subscribing to one of the public DDNS providers
 
 4. Configure the tool to run regularly to create and update that A record with your IP address. Run this regularly from a computer behind that IP address, e.g. on a home server using a CRON job.
 
+```bash
+uv run r53.py --zone example.com --name home --myip
 ```
-r53 --zone example.com --name home --myip
+
+Or add this to your crontab to update every 5 minutes:
+```bash
+*/5 * * * * cd /path/to/r53 && uv run r53.py --zone example.com --name home --myip >> /var/log/ddns.log 2>&1
 ```
