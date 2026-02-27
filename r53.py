@@ -225,8 +225,7 @@ def is_valid_dns_name(dns_name):
                 :-1
             ]  # strip exactly one dot from the right, if present
         allowed = re.compile(
-            r"^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
-(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
+            r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",  # noqa: E501 - do not split regex across lines
             re.IGNORECASE,
         )
     except TypeError:
@@ -250,8 +249,7 @@ def is_valid_hostname(hostname):
     """
     try:
         allowed = re.compile(
-            r"^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\
-(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$",
+            r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",  # noqa: E501 - do not split regex across lines
             re.IGNORECASE,
         )
         return allowed.match(hostname) is not None
