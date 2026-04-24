@@ -186,3 +186,52 @@ Or add this to your crontab to update every 5 minutes:
 ```bash
 */5 * * * * cd /path/to/r53 && uv run r53.py --zone example.com --name home --myip >> /var/log/ddns.log 2>&1
 ```
+
+## Development
+
+Install development dependencies (pytest, pytest-cov) with:
+
+```bash
+uv sync
+```
+
+Run the unit-test suite:
+
+```bash
+uv run pytest
+```
+
+Unit tests make no network calls and require no AWS credentials.
+
+## Integration Testing
+
+The project includes a pytest-based integration suite that exercises the
+real `r53.py` CLI against a real Route 53 hosted zone and verifies
+outcomes with the `aws` CLI. These tests require:
+
+- Python 3.11+ (for stdlib `tomllib`).
+- The `aws` CLI installed and on `PATH`.
+- Valid AWS credentials for an account that owns a throwaway hosted zone.
+- A `.r53-itest.toml` file in the repo root (gitignored).
+
+Set up the config by copying the example:
+
+```bash
+cp .r53-itest.example.toml .r53-itest.toml
+# edit .r53-itest.toml and fill in `domain` (required),
+# `profile` (optional), and `region` (optional)
+```
+
+Run the integration suite:
+
+```bash
+uv run pytest -m integration
+```
+
+All records created during integration tests are prefixed with
+`r53-itest-` and are cleaned up automatically before and after each test.
+If a test run crashes and leaves records behind, sweep them manually:
+
+```bash
+uv run tests/integration/cleanup_script.py
+```
