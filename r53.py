@@ -238,6 +238,8 @@ def is_valid_dns_name(dns_name: str) -> bool:
     try:
         if len(dns_name) > 255:
             return False
+        if not dns_name:
+            return False
         if dns_name[-1] == ".":
             dns_name = dns_name[
                 :-1
