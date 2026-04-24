@@ -46,6 +46,11 @@ def test_is_valid_ipv4_address_non_string():
         ("not-an-address", False),
         ("", False),
         ("gggg::1", False),
+        # Zone/scope ID syntax: accepted on platforms whose inet_pton
+        # tolerates the "%zone" suffix (macOS, Linux glibc). Pinning the
+        # current behavior here so a silent change on a new platform is
+        # caught by a test, not by a user report.
+        ("fe80::1%eth0", True),
     ],
 )
 def test_is_valid_ipv6_address(address, expected):
@@ -71,6 +76,9 @@ def test_is_valid_ipv6_address_non_string():
         ("exa..mple.com", False),
         ("a" * 64 + ".com", False),
         (("a" * 63 + ".") * 4 + "com", False),
+        (".", False),
+        (("a" * 63 + ".") * 3 + "a" * 63, True),
+        (("a" * 63 + ".") * 4, False),
     ],
 )
 def test_is_valid_dns_name(name, expected):
@@ -92,6 +100,8 @@ def test_is_valid_dns_name_non_string():
         ("host..example.com", False),
         ("", False),
         ("a" * 64, False),
+        (("a" * 63 + ".") * 3 + "a" * 63, True),
+        (("a" * 63 + ".") * 4, False),
     ],
 )
 def test_is_valid_hostname(hostname, expected):

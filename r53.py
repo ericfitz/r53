@@ -268,6 +268,8 @@ def is_valid_hostname(hostname: str) -> bool:
     :return: True if the hostname is valid, False otherwise
     """
     try:
+        if len(hostname) > 255:
+            return False
         allowed = re.compile(
             r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",  # noqa: E501 - do not split regex across lines
             re.IGNORECASE,

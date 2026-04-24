@@ -23,7 +23,7 @@ RECORD_PREFIX = "r53-itest-"
 logger = logging.getLogger(__name__)
 
 
-def _aws_env_args(config: IntegrationConfig) -> list[str]:
+def aws_env_args(config: IntegrationConfig) -> list[str]:
     args = []
     if config.profile:
         args += ["--profile", config.profile]
@@ -33,7 +33,7 @@ def _aws_env_args(config: IntegrationConfig) -> list[str]:
 
 
 def _run_aws(config: IntegrationConfig, *aws_args: str, check: bool = True) -> subprocess.CompletedProcess:
-    cmd = ["aws", *_aws_env_args(config), *aws_args]
+    cmd = ["aws", *aws_env_args(config), *aws_args]
     return subprocess.run(cmd, check=check, capture_output=True, text=True)
 
 

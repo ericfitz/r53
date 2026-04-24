@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from .cleanup import sweep
+from .cleanup import aws_env_args, sweep
 from .config import ConfigError, IntegrationConfig, load_config
 
 
@@ -49,21 +49,25 @@ def _require_aws_cli():
         pytest.skip("aws CLI is not installed or not on PATH")
 
 
-def _aws_env_args(config: IntegrationConfig) -> list[str]:
-    args = []
-    if config.profile:
-        args += ["--profile", config.profile]
-    if config.region:
-        args += ["--region", config.region]
-    return args
-
-
 class AwsCli:
+    """Thin wrapper around the `aws` CLI for integration tests.
+
+    The configured `--profile` and `--region` are injected on every call.
+    Failures raise AssertionError with the invoked command plus captured
+    stdout/stderr, so pytest's default display surfaces what actually
+    went wrong — unlike the default CalledProcessError which hides them.
+    """
+
     def __init__(self, config: IntegrationConfig) -> None:
         self._config = config
 
     def run(self, *args: str) -> subprocess.CompletedProcess:
-        cmd = ["aws", *_aws_env_args(self._config), *args]
+        """Run `aws <args>` and return the CompletedProcess.
+
+        Always uses `check=True`; a non-zero exit becomes an AssertionError
+        with full stdout/stderr in the message.
+        """
+        cmd = ["aws", *aws_env_args(self._config), *args]
         try:
             return subprocess.run(cmd, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
@@ -75,15 +79,29 @@ class AwsCli:
             ) from e
 
     def run_json(self, *args: str) -> Any:
+        """Run `aws <args> --output json` and return the parsed JSON body."""
         return json.loads(self.run(*args, "--output", "json").stdout)
 
 
 class R53Cli:
+    """Thin wrapper that invokes `r53.py` as a subprocess for end-to-end tests.
+
+    `cwd` is fixed to the repo root so `uv run r53.py` resolves correctly
+    regardless of where pytest was invoked. Configured `--profile` and
+    `--region` are injected automatically. Like AwsCli, CalledProcessError
+    is re-raised as AssertionError with stdout/stderr visible.
+    """
+
     def __init__(self, config: IntegrationConfig, repo_root: Path) -> None:
         self._config = config
         self._repo_root = repo_root
 
     def run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        """Run `uv run r53.py <args>` and return the CompletedProcess.
+
+        Pass `check=False` to allow non-zero exit codes without raising
+        (useful for negative-case tests that assert on failure output).
+        """
         cmd = [
             "uv", "run", "r53.py",
             *( ["--profile", self._config.profile] if self._config.profile else [] ),
