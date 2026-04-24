@@ -231,3 +231,31 @@ def test_delete_nonexistent_record_fails(
     assert proc.returncode != 0
     combined = proc.stdout + proc.stderr
     assert "Cannot delete nonexistent" in combined or "nonexistent" in combined.lower()
+
+
+def test_myip_upsert(
+    integration_config, r53_cli, aws_cli, zone_id, itest_record_name
+):
+    import socket
+    from urllib import error, request
+    import pytest
+
+    try:
+        with request.urlopen("https://checkip.amazonaws.com", timeout=5) as f:
+            expected_ip = f.read().decode("utf-8").strip()
+    except (error.URLError, error.HTTPError, socket.error):
+        pytest.skip("Cannot reach checkip.amazonaws.com from this host")
+
+    short_name = itest_record_name("myip")
+    fqdn = f"{short_name}.{integration_config.domain}"
+
+    r53_cli.run(
+        "--zone", integration_config.domain,
+        "--name", short_name,
+        "--myip",
+        "--ttl", "60",
+    )
+    rr = _find_rrset(aws_cli, zone_id, fqdn)
+    assert rr is not None
+    assert rr["Type"] == "A"
+    assert [v["Value"] for v in rr["ResourceRecords"]] == [expected_ip]
