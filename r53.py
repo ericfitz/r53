@@ -56,7 +56,13 @@ import socket
 from urllib import request, error
 import sys
 import logging
-from botocore.exceptions import ClientError
+from botocore.exceptions import (
+    BotoCoreError,
+    ClientError,
+    NoCredentialsError,
+    NoRegionError,
+    ProfileNotFound,
+)
 import boto3
 
 # set up logging
@@ -75,8 +81,9 @@ def get_instance_ip(instance_id):
     try:
         response = ec2.describe_instances(InstanceIds=[instance_id])
     except ClientError as e:
-        logger.error("AWS ec2-describe-instances error: %s", e)
-        sys.exit()
+        raise RuntimeError(
+            f"ec2:DescribeInstances failed for {instance_id}: {e}"
+        ) from e
 
     # Check if any reservations exist
     if not response.get("Reservations"):
@@ -113,8 +120,9 @@ def get_ip_from_eip(eip_allocation_id):
     try:
         response = ec2.describe_addresses(AllocationIds=[eip_allocation_id])
     except ClientError as e:
-        logger.error("AWS ec2-describe-addresses error: %s", e)
-        sys.exit()
+        raise RuntimeError(
+            f"ec2:DescribeAddresses failed for {eip_allocation_id}: {e}"
+        ) from e
 
     # Check if any addresses were returned
     addresses = response.get("Addresses", [])
@@ -152,8 +160,7 @@ def get_my_ip():
         with request.urlopen("https://checkip.amazonaws.com") as f:
             return f.read().decode("utf-8").strip()
     except (error.URLError, error.HTTPError, socket.error) as e:
-        logger.error("Error retrieving public IP address: %s", e)
-        sys.exit()
+        raise RuntimeError(f"Error retrieving public IP address: {e}") from e
 
 
 # https://stackoverflow.com/questions/319279/how-to-validate-ip-address-in-python
@@ -283,8 +290,9 @@ def get_hosted_zone_id_from_name(domain_name):
                     return zone_id
         return None
     except ClientError as e:
-        logger.error("AWS route53-list-hosted-zones error: %s", e)
-        sys.exit()
+        raise RuntimeError(
+            f"route53:ListHostedZones failed while resolving {domain_name}: {e}"
+        ) from e
 
 
 def list_hosted_zones():
@@ -306,8 +314,7 @@ def list_hosted_zones():
                 zone_name = zone["Name"].rstrip(".")
                 print(zone_id, zone_name)
     except ClientError as e:
-        logger.error("AWS route53-list-hosted-zones error: %s", e)
-        sys.exit()
+        raise RuntimeError(f"route53:ListHostedZones failed: {e}") from e
 
 
 def get_current_record(zone_id, record_name):
@@ -351,8 +358,9 @@ def get_current_record(zone_id, record_name):
 
                     return result
     except ClientError as e:
-        logger.error("AWS route53-list-resource-record-sets error: %s", e)
-        sys.exit()
+        raise RuntimeError(
+            f"route53:ListResourceRecordSets failed for zone {zone_id}: {e}"
+        ) from e
     return result
 
 
@@ -412,8 +420,9 @@ def list_rr(zone_id, record_name):
                         rrset
                     )
     except ClientError as e:
-        logger.error("AWS route53-list-resource-record-sets error: %s", e)
-        sys.exit()
+        raise RuntimeError(
+            f"route53:ListResourceRecordSets failed for zone {zone_id}: {e}"
+        ) from e
 
 
 def change_rr(action, zone_id, record_type, record_name, value, ttl):
@@ -467,8 +476,10 @@ def change_rr(action, zone_id, record_type, record_name, value, ttl):
             },
         )
     except ClientError as e:
-        logger.error("AWS route53-change-resource-record-sets error: %s", e)
-        sys.exit()
+        raise RuntimeError(
+            f"route53:ChangeResourceRecordSets {action} failed for "
+            f"{record_name} in zone {zone_id}: {e}"
+        ) from e
     return response
 
 
@@ -476,291 +487,249 @@ def change_rr(action, zone_id, record_type, record_name, value, ttl):
 # Begin main script
 ####################################################################################################
 
-# parse command line arguments
-parser = argparse.ArgumentParser(
-    prog="r53", description="Manage resource records in AWS Route 53"
-)
+# boto3 clients are populated by main() before any helper is called.
+route53 = None
+ec2 = None
 
-parser.add_argument(
-    "--profile",
-    action="store",
-    help="Use the specified AWS configuration profile instead of the default profile.",
-)
-parser.add_argument(
-    "--region",
-    action="store",
-    help="Targets AWS API calls against the specified region instead of the default region in AWS configuration.",
-)
-parser.add_argument(
-    "--delete",
-    action="store_true",
-    help="Delete a resource record from a zone.",
-)
-# default operation is list. If a value is specified, operation is upsert.  Delete must be explicit.
-parser.add_argument("--zone", action="store", help="DNS name of target zone")
-parser.add_argument("--name", action="store", help="name of resource record")
-parser.add_argument(
-    "--type",
-    action="store",
-    help="Specifies the DNS resource record type",
-    choices=["A", "AAAA", "CAA", "CNAME", "MX", "NAPTR", "NS", "PTR", "SOA", "SPF", "SRV", "TXT"],
-)
-parser.add_argument(
-    "--ttl", action="store", type=int, default=300, help="TTL (in seconds, 0-2147483647)"
-)
-parser.add_argument(
-    "--value", action="store", help="Specifies the value to set in the resource record"
-)
-parser.add_argument(
-    "--eip",
-    action="store",
-    help="Sets value to the IP address associated with the specified EIP. Type and value parameters are ignored if EIP is specified.",
-)
-parser.add_argument(
-    "--myip",
-    action="store_true",
-    help="Uses the calling computer's public IP address. Type and value parameters are ignored if --myip is specified.",
-)
-# noinspection SpellCheckingInspection,SpellCheckingInspection
-parser.add_argument(
-    "--instanceid",
-    action="store",
-    help="Sets value to the public IP address of the specified EC2 instance. Type and value parameters are ignored if instance ID is specified.",
-)
 
-args = parser.parse_args()
-logger.debug("Arguments: %s", str(args))
-
-# set up the boto3 clients
-if args.profile is not None:
-    logger.info("Using AWS profile: %s", args.profile)
-    try:
-        boto3.setup_default_session(profile_name=args.profile)
-    except ClientError as e:
-        logger.error(
-            "Boto error %s creating session using specified profile %s", e, args.profile
-        )
-        sys.exit()
-
-# AWS Route 53 is global, not regional, so we can ignore region for Route 53 connection.
-try:
-    route53 = boto3.client("route53")
-except ClientError as e:
-    logger.error("Boto error %s creating Route 53 client", e)
-    sys.exit()
-
-# EC2 is regional, so we need to use region if specified
-# r53 uses EC2 to look up instance IP addresses & EIPs
-if args.region is not None:
-    logger.info("Using AWS region: %s", args.region)
-    try:
-        ec2 = boto3.client("ec2", region_name=args.region)
-    except ClientError as e:
-        logger.error(
-            "Boto error %s creating EC2 client in specified region %s", e, args.region
-        )
-        sys.exit()
-else:
-    try:
-        ec2 = boto3.client("ec2")
-    except ClientError as e:
-        logger.error("Boto error %s creating EC2 client in default region", e)
-        sys.exit()
-
-# Validate and process the provided parameters
-ZONE_NAME = args.zone
-RECORD_NAME = args.name
-RECORD_TYPE = args.type
-value = args.value
-eip = args.eip
-myip = args.myip
-instanceid = args.instanceid
-ttl = args.ttl
-
-# Validate TTL range per Route 53 constraints
-if ttl < 0 or ttl > 2147483647:
-    raise ValueError(
-        f"TTL must be between 0 and 2147483647 seconds, got: {ttl}"
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog="r53", description="Manage resource records in AWS Route 53"
     )
+    parser.add_argument(
+        "--profile",
+        action="store",
+        help="Use the specified AWS configuration profile instead of the default profile.",
+    )
+    parser.add_argument(
+        "--region",
+        action="store",
+        help="Targets AWS API calls against the specified region instead of the default region in AWS configuration.",
+    )
+    parser.add_argument(
+        "--delete",
+        action="store_true",
+        help="Delete a resource record from a zone.",
+    )
+    parser.add_argument("--zone", action="store", help="DNS name of target zone")
+    parser.add_argument("--name", action="store", help="name of resource record")
+    parser.add_argument(
+        "--type",
+        action="store",
+        help="Specifies the DNS resource record type",
+        choices=["A", "AAAA", "CAA", "CNAME", "MX", "NAPTR", "NS", "PTR", "SOA", "SPF", "SRV", "TXT"],
+    )
+    parser.add_argument(
+        "--ttl", action="store", type=int, default=300, help="TTL (in seconds, 0-2147483647)"
+    )
+    parser.add_argument(
+        "--value", action="store", help="Specifies the value to set in the resource record"
+    )
+    parser.add_argument(
+        "--eip",
+        action="store",
+        help="Sets value to the IP address associated with the specified EIP. Type and value parameters are ignored if EIP is specified.",
+    )
+    parser.add_argument(
+        "--myip",
+        action="store_true",
+        help="Uses the calling computer's public IP address. Type and value parameters are ignored if --myip is specified.",
+    )
+    # noinspection SpellCheckingInspection,SpellCheckingInspection
+    parser.add_argument(
+        "--instanceid",
+        action="store",
+        help="Sets value to the public IP address of the specified EC2 instance. Type and value parameters are ignored if instance ID is specified.",
+    )
+    return parser.parse_args()
 
-# only allow one of (value, eip, myip, instanceid) to be specified
-NUMVALUES = 0
 
-if value is not None:
-    NUMVALUES += 1
+def build_clients(profile, region):
+    """Initialize boto3 session and clients. Raises on failure."""
+    global route53, ec2
+    if profile is not None:
+        logger.info("Using AWS profile: %s", profile)
+        try:
+            boto3.setup_default_session(profile_name=profile)
+        except ProfileNotFound as e:
+            raise RuntimeError(f"AWS profile '{profile}' not found: {e}") from e
 
-if eip is not None:
-    NUMVALUES += 1
     try:
+        route53 = boto3.client("route53")
+        if region is not None:
+            logger.info("Using AWS region: %s", region)
+            ec2 = boto3.client("ec2", region_name=region)
+        else:
+            ec2 = boto3.client("ec2")
+    except (BotoCoreError, NoCredentialsError, NoRegionError) as e:
+        raise RuntimeError(f"Failed to create AWS client: {e}") from e
+
+
+def resolve_value(args):
+    """Resolve the record value from --value/--eip/--myip/--instanceid.
+
+    Returns the resolved value (possibly None) and validates that at most one
+    source was specified.
+    """
+    sources = [args.value, args.eip, args.instanceid]
+    num_specified = sum(1 for s in sources if s is not None) + (1 if args.myip else 0)
+    if num_specified > 1:
+        raise ValueError("Specify only one of value, eip, myip, or instanceid")
+
+    if args.eip is not None:
         value = get_ip_from_eip(args.eip)
         logger.debug("Calculated value from eip: %s", value)
-    except ValueError as e:
-        logger.error("Failed to retrieve IP from EIP: %s", e)
-        sys.exit(1)
-
-if myip:
-    NUMVALUES += 1
-    value = get_my_ip()
-    logger.debug("Calculated value from IP lookup: %s", value)
-
-if instanceid is not None:
-    NUMVALUES += 1
-    try:
+        return value
+    if args.myip:
+        value = get_my_ip()
+        logger.debug("Calculated value from IP lookup: %s", value)
+        return value
+    if args.instanceid is not None:
         value = get_instance_ip(args.instanceid)
         logger.debug("Calculated value from EC2 instance ID: %s", value)
-    except ValueError as e:
-        logger.error("Failed to retrieve IP from instance: %s", e)
-        sys.exit(1)
+        return value
+    return args.value
 
-if NUMVALUES > 1:
-    raise ValueError(
-        "Specify only one of value, eip, myip, or instanceid"
-    )  # only one of value, eip, myip, or instanceid can be specified
 
-# figure out the record type if not explicitly specified
-if RECORD_TYPE is None:
-    # Only attempt type inference if a value exists
-    if value is not None:
-        if is_valid_ipv4_address(value):
-            RECORD_TYPE = "A"
-        elif is_valid_ipv6_address(value):
-            RECORD_TYPE = "AAAA"
-        elif is_valid_dns_name(value):
-            RECORD_TYPE = "CNAME"
-        else:
-            raise ValueError(
-                f"Cannot infer record type from value '{value}'. "
-                "Please specify --type explicitly."
-            )
-        logger.info("Inferred record type: %s", RECORD_TYPE)
-    else:
-        # value is None - this is OK for DESCRIBE and LIST operations
-        # but will be caught later if trying to UPSERT
+def infer_record_type(explicit_type, value):
+    """Infer the DNS record type from the value if not explicitly given."""
+    if explicit_type is not None:
+        return explicit_type
+    if value is None:
         logger.debug("No value provided, type inference skipped")
-
-# look up zone id if zone name provided
-ZONE_ID = None
-if ZONE_NAME is not None:
-    if not is_valid_dns_name(args.zone):
-        raise ValueError(f"Invalid zone name: {args.zone}")
-    ZONE_ID = get_hosted_zone_id_from_name(args.zone)
-    if ZONE_ID is None:
+        return None
+    if is_valid_ipv4_address(value):
+        inferred = "A"
+    elif is_valid_ipv6_address(value):
+        inferred = "AAAA"
+    elif is_valid_dns_name(value):
+        inferred = "CNAME"
+    else:
         raise ValueError(
-            f"Zone '{args.zone}' not found in Route 53. "
+            f"Cannot infer record type from value '{value}'. "
+            "Please specify --type explicitly."
+        )
+    logger.info("Inferred record type: %s", inferred)
+    return inferred
+
+
+def resolve_zone_id(zone_name):
+    """Look up the Route 53 zone ID for a zone name, or raise if not found."""
+    if zone_name is None:
+        return None
+    if not is_valid_dns_name(zone_name):
+        raise ValueError(f"Invalid zone name: {zone_name}")
+    zone_id = get_hosted_zone_id_from_name(zone_name)
+    if zone_id is None:
+        raise ValueError(
+            f"Zone '{zone_name}' not found in Route 53. "
             "Use 'r53' without arguments to list available zones."
         )
-    logger.debug("Matched zone name %s to zone ID %s", ZONE_NAME, ZONE_ID)
+    logger.debug("Matched zone name %s to zone ID %s", zone_name, zone_id)
+    return zone_id
 
-# append the zone name to the record name if required
-if RECORD_NAME is not None and ZONE_NAME is not None:
-    RECORD_NAME = str(args.name) + "." + str(args.zone)
-    logger.debug("Concatenated record name: %s", RECORD_NAME)
 
-# figure out the action to take
-# logic is described in Google sheet: https://bit.ly/r53params
-if ZONE_ID is None:
-    ACTION = "LISTZONES"
-else:
-    if RECORD_NAME is None:
-        ACTION = "LIST"
-    else:
-        if RECORD_TYPE is None:
-            ACTION = "DESCRIBE"
-        else:
-            if value is None:
-                if args.delete:
-                    ACTION = "DELETE"
-                else:
-                    raise ValueError("Must specify value for upserts")
-            else:
-                ACTION = "UPSERT"
+def determine_action(zone_id, record_name, record_type, value, delete):
+    """Decide which action to perform based on the argument combination.
 
-if ACTION is None:
-    raise ValueError(
-        "Invalid parameter combination and/or values"
-    )  # if we got here, there was a bug in the parameter validation code above
-else:
-    logger.info("Inferred action: %s", ACTION)
+    Logic is described in Google sheet: https://bit.ly/r53params
+    """
+    if zone_id is None:
+        return "LISTZONES"
+    if record_name is None:
+        return "LIST"
+    if record_type is None:
+        return "DESCRIBE"
+    if value is None:
+        if delete:
+            return "DELETE"
+        raise ValueError("Must specify value for upserts")
+    return "UPSERT"
 
-# execute the action
-match ACTION:
-    case "LISTZONES":
-        logger.debug("Executing action: action:%s", ACTION)
-        list_hosted_zones()
-    case "LIST":
-        logger.debug("Executing action: action:%s zoneid:%s", ACTION, ZONE_ID)
-        list_rr(ZONE_ID, ".")
-    case "DESCRIBE":
-        logger.debug(
-            "Executing action: action:%s zoneid:%s recordname:%s",
-            ACTION,
-            ZONE_ID,
-            RECORD_NAME,
-        )
-        list_rr(ZONE_ID, RECORD_NAME)
-    case "UPSERT":
-        logger.debug(
-            "Executing action: action:%s zoneid:%s recordname:%s value:%s ttl:%s",
-            ACTION,
-            ZONE_ID,
-            RECORD_NAME,
-            value,
-            args.ttl,
-        )
-        change_rr(ACTION, ZONE_ID, RECORD_TYPE, RECORD_NAME, value, args.ttl)
-    case "DELETE":
-        current_record = get_current_record(ZONE_ID, RECORD_NAME)
 
-        # Check if record exists
-        if not current_record:
-            logger.error("Cannot delete nonexistent record: %s", RECORD_NAME)
-            sys.exit()
+def execute_delete(zone_id, record_name, record_type):
+    """Delete a record after verifying it exists, is not an alias, and is single-valued."""
+    current_record = get_current_record(zone_id, record_name)
 
-        # Check if this is an alias record
-        if "AliasTarget" in current_record:
-            logger.error(
-                "Cannot delete alias record: %s. "
-                "Alias records must be deleted via AWS Console or AWS CLI.",
-                RECORD_NAME
-            )
-            sys.exit()
+    if not current_record:
+        raise ValueError(f"Cannot delete nonexistent record: {record_name}")
 
-        # Check for multi-value records
-        values = current_record.get("Values", [])
-        if len(values) > 1:
-            logger.error(
-                "Record %s has %d values: %s",
-                RECORD_NAME,
-                len(values),
-                ", ".join(values)
-            )
-            logger.error(
-                "Multi-value record deletion is not supported. "
-                "Use AWS Console or AWS CLI to delete this record."
-            )
-            sys.exit()
-
-        value = values[0]
-
-        logger.debug(
-            "Executing action: action:%s zoneid:%s recordname:%s value:%s ttl:%s",
-            ACTION,
-            ZONE_ID,
-            RECORD_NAME,
-            value,
-            current_record["TTL"],
-        )
-
-        try:
-            change_rr(
-                ACTION, ZONE_ID, RECORD_TYPE, RECORD_NAME, value, current_record["TTL"]
-            )
-        except ClientError as e:
-            logger.error("Failed to delete record: %s", e)
-            sys.exit()
-    case _:
+    if "AliasTarget" in current_record:
         raise ValueError(
-            "Invalid parameter combination and/or values."
-        )  # if we got here, there was a bug in the parameter validation code above
+            f"Cannot delete alias record: {record_name}. "
+            "Alias records must be deleted via AWS Console or AWS CLI."
+        )
 
-logger.info("Success")
+    values = current_record.get("Values", [])
+    if len(values) > 1:
+        raise ValueError(
+            f"Record {record_name} has {len(values)} values: {', '.join(values)}. "
+            "Multi-value record deletion is not supported. "
+            "Use AWS Console or AWS CLI to delete this record."
+        )
+
+    value = values[0]
+    logger.debug(
+        "Executing action: action:DELETE zoneid:%s recordname:%s value:%s ttl:%s",
+        zone_id, record_name, value, current_record["TTL"],
+    )
+    change_rr("DELETE", zone_id, record_type, record_name, value, current_record["TTL"])
+
+
+def main():
+    args = parse_args()
+    logger.debug("Arguments: %s", str(args))
+
+    if args.ttl < 0 or args.ttl > 2147483647:
+        raise ValueError(
+            f"TTL must be between 0 and 2147483647 seconds, got: {args.ttl}"
+        )
+
+    build_clients(args.profile, args.region)
+
+    value = resolve_value(args)
+    record_type = infer_record_type(args.type, value)
+    zone_id = resolve_zone_id(args.zone)
+
+    record_name = args.name
+    if record_name is not None and args.zone is not None:
+        record_name = f"{args.name}.{args.zone}"
+        logger.debug("Concatenated record name: %s", record_name)
+
+    action = determine_action(zone_id, record_name, record_type, value, args.delete)
+    logger.info("Inferred action: %s", action)
+
+    match action:
+        case "LISTZONES":
+            logger.debug("Executing action: action:%s", action)
+            list_hosted_zones()
+        case "LIST":
+            logger.debug("Executing action: action:%s zoneid:%s", action, zone_id)
+            list_rr(zone_id, ".")
+        case "DESCRIBE":
+            logger.debug(
+                "Executing action: action:%s zoneid:%s recordname:%s",
+                action, zone_id, record_name,
+            )
+            list_rr(zone_id, record_name)
+        case "UPSERT":
+            logger.debug(
+                "Executing action: action:%s zoneid:%s recordname:%s value:%s ttl:%s",
+                action, zone_id, record_name, value, args.ttl,
+            )
+            change_rr(action, zone_id, record_type, record_name, value, args.ttl)
+        case "DELETE":
+            execute_delete(zone_id, record_name, record_type)
+        case _:
+            raise ValueError("Invalid parameter combination and/or values.")
+
+    logger.info("Success")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, RuntimeError, ClientError, BotoCoreError) as e:
+        logger.error("%s", e)
+        sys.exit(1)
+
