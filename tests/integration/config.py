@@ -1,12 +1,10 @@
 """Integration-test configuration loader.
 
-Reads .r53-itest.toml from the repo root. Requires Python 3.11+ for
-stdlib tomllib; production r53.py still supports 3.10.
+Reads .r53-itest.toml from the repo root.
 """
 
 from __future__ import annotations
 
-import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,12 +37,6 @@ def load_config() -> IntegrationConfig:
     Raises ConfigError if the file is missing or malformed. The pytest
     fixture in tests/integration/conftest.py converts this into a skip.
     """
-    if sys.version_info < (3, 11):
-        raise ConfigError(
-            "Integration tests require Python 3.11+ (for stdlib tomllib). "
-            f"Current: {sys.version_info.major}.{sys.version_info.minor}"
-        )
-
     path = _repo_root() / CONFIG_FILENAME
     if not path.exists():
         raise ConfigError(

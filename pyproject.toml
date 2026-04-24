@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "Command-line tool for managing AWS Route 53 DNS records"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Eric Fitzgerald" },
 ]
