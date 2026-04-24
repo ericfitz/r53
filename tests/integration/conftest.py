@@ -64,7 +64,15 @@ class AwsCli:
 
     def run(self, *args: str) -> subprocess.CompletedProcess:
         cmd = ["aws", *_aws_env_args(self._config), *args]
-        return subprocess.run(cmd, check=True, capture_output=True, text=True)
+        try:
+            return subprocess.run(cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            raise AssertionError(
+                f"aws CLI failed (exit {e.returncode})\n"
+                f"  cmd: {' '.join(cmd)}\n"
+                f"  stdout:\n{e.stdout}\n"
+                f"  stderr:\n{e.stderr}"
+            ) from e
 
     def run_json(self, *args: str) -> Any:
         return json.loads(self.run(*args, "--output", "json").stdout)
@@ -82,7 +90,15 @@ class R53Cli:
             *( ["--region", self._config.region] if self._config.region else [] ),
             *args,
         ]
-        return subprocess.run(cmd, cwd=self._repo_root, check=check, capture_output=True, text=True)
+        try:
+            return subprocess.run(cmd, cwd=self._repo_root, check=check, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            raise AssertionError(
+                f"r53.py failed (exit {e.returncode})\n"
+                f"  cmd: {' '.join(cmd)}\n"
+                f"  stdout:\n{e.stdout}\n"
+                f"  stderr:\n{e.stderr}"
+            ) from e
 
 
 @pytest.fixture(scope="session")
