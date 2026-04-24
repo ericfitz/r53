@@ -30,7 +30,7 @@ def test_is_valid_ipv4_address(address, expected):
 
 
 def test_is_valid_ipv4_address_non_string():
-    assert is_valid_ipv4_address(None) is False
+    assert is_valid_ipv4_address(None) is False  # ty: ignore[invalid-argument-type]
 
 
 @pytest.mark.parametrize(
@@ -57,7 +57,7 @@ def test_is_valid_ipv6_address(address, expected):
 
 
 def test_is_valid_ipv6_address_non_string():
-    assert is_valid_ipv6_address(None) is False
+    assert is_valid_ipv6_address(None) is False  # ty: ignore[invalid-argument-type]
 
 
 @pytest.mark.parametrize(
@@ -91,4 +91,4 @@ def test_is_valid_dns_name(name, expected):
 
 
 def test_is_valid_dns_name_non_string():
-    assert is_valid_dns_name(None) is False
+    assert is_valid_dns_name(None) is False  # ty: ignore[invalid-argument-type]
