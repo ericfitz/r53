@@ -7,4 +7,9 @@
 !pyproject.toml
 !uv.lock
 
+# tests
+!tests/
+!tests/**
 
+# example integration-test config (real config .r53-itest.toml stays excluded)
+!.r53-itest.example.toml

@@ -1,0 +1,17 @@
+# Integration-test configuration for r53.
+#
+# Copy this file to .r53-itest.toml (gitignored) and fill in your values.
+#
+# `domain` is required — the DNS name of a Route 53 hosted zone you own
+# and are willing to let the integration tests create/delete records in.
+# Records will be prefixed `r53-itest-` and cleaned up automatically.
+
+domain = "your-test-zone.example.com"
+
+# Optional — AWS configuration profile to use. If omitted, uses the
+# default profile or environment credentials.
+# profile = "personal"
+
+# Optional — AWS region. If omitted, uses the region from the profile or
+# environment.
+# region = "us-east-1"

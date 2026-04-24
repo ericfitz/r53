@@ -238,6 +238,8 @@ def is_valid_dns_name(dns_name: str) -> bool:
     try:
         if len(dns_name) > 255:
             return False
+        if not dns_name:
+            return False
         if dns_name[-1] == ".":
             dns_name = dns_name[
                 :-1
@@ -511,7 +513,7 @@ def change_rr(
 # Begin main script
 ####################################################################################################
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="r53", description="Manage resource records in AWS Route 53"
     )
@@ -560,7 +562,7 @@ def parse_args() -> argparse.Namespace:
         action="store",
         help="Sets value to the public IP address of the specified EC2 instance. Type and value parameters are ignored if instance ID is specified.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def build_clients(profile: Optional[str], region: Optional[str]) -> Clients:
@@ -702,8 +704,8 @@ def execute_delete(zone_id: str, record_name: str, record_type: str, route53: An
     change_rr("DELETE", zone_id, record_type, record_name, value, current_record["TTL"], route53)
 
 
-def main() -> None:
-    args = parse_args()
+def main(argv: Optional[list[str]] = None, clients: Optional[Clients] = None) -> None:
+    args = parse_args(argv)
     logger.debug("Arguments: %s", str(args))
 
     if args.ttl < 0 or args.ttl > 2147483647:
@@ -711,7 +713,8 @@ def main() -> None:
             f"TTL must be between 0 and 2147483647 seconds, got: {args.ttl}"
         )
 
-    clients = build_clients(args.profile, args.region)
+    if clients is None:
+        clients = build_clients(args.profile, args.region)
 
     value = resolve_value(args, clients.ec2)
     record_type = infer_record_type(args.type, value)
