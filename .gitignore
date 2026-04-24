@@ -13,3 +13,5 @@
 
 # example integration-test config (real config .r53-itest.toml stays excluded)
 !.r53-itest.example.toml
+tests/__pycache__/**
+tests/*/__pycache__/**
