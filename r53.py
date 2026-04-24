@@ -53,6 +53,8 @@ Author:
 import argparse
 import re
 import socket
+from dataclasses import dataclass
+from typing import Any, Optional
 from urllib import request, error
 import sys
 import logging
@@ -65,16 +67,24 @@ from botocore.exceptions import (
 )
 import boto3
 
+
+@dataclass
+class Clients:
+    """Bundle of boto3 clients used by this script."""
+    route53: Any
+    ec2: Any
+
 # set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
 
 
-def get_instance_ip(instance_id):
+def get_instance_ip(instance_id: str, ec2: Any) -> str:
     """
     Given an instance id, returns the public IP address of that instance.
 
     :param instance_id: EC2 instance ID
+    :param ec2: boto3 EC2 client
     :return: str, the public IPv4 address of the instance
     :raises ValueError: if instance has no public IP or instance not found
     """
@@ -109,11 +119,12 @@ def get_instance_ip(instance_id):
     )
 
 
-def get_ip_from_eip(eip_allocation_id):
+def get_ip_from_eip(eip_allocation_id: str, ec2: Any) -> str:
     """
     Given an Elastic IP Allocation Id, returns the public IP address of that Elastic IP address.
 
     :param eip_allocation_id: EIP allocation ID (e.g., 'eipalloc-xxxxx')
+    :param ec2: boto3 EC2 client
     :return: str, the public IPv4 address associated with the EIP
     :raises ValueError: if EIP allocation ID is invalid or not found
     """
@@ -147,7 +158,7 @@ def get_ip_from_eip(eip_allocation_id):
     return ip_address
 
 
-def get_my_ip():
+def get_my_ip() -> str:
     """
     Get the public IP address of the host running this script.
 
@@ -164,7 +175,7 @@ def get_my_ip():
 
 
 # https://stackoverflow.com/questions/319279/how-to-validate-ip-address-in-python
-def is_valid_ipv4_address(address):
+def is_valid_ipv4_address(address: str) -> bool:
     """
     Validate an IP address.
 
@@ -193,7 +204,7 @@ def is_valid_ipv4_address(address):
     return True
 
 
-def is_valid_ipv6_address(address):
+def is_valid_ipv6_address(address: str) -> bool:
     """
     Validate an IPv6 address.
 
@@ -212,7 +223,7 @@ def is_valid_ipv6_address(address):
 
 
 # https://stackoverflow.com/questions/2532053/validate-a-hostname-string
-def is_valid_dns_name(dns_name):
+def is_valid_dns_name(dns_name: str) -> bool:
     """
     Validate a DNS name.
 
@@ -241,7 +252,7 @@ def is_valid_dns_name(dns_name):
     return validated_dns_name is not None
 
 
-def is_valid_hostname(hostname):
+def is_valid_hostname(hostname: str) -> bool:
     """
     Validate a hostname.
 
@@ -264,7 +275,7 @@ def is_valid_hostname(hostname):
         return False
 
 
-def get_hosted_zone_id_from_name(domain_name):
+def get_hosted_zone_id_from_name(domain_name: str, route53: Any) -> Optional[str]:
     """
     Retrieve the hosted zone ID for a given domain name.
 
@@ -273,6 +284,7 @@ def get_hosted_zone_id_from_name(domain_name):
     corresponding hosted zone ID. If no match is found, it returns None.
 
     :param domain_name: The domain name to search for in Route 53 hosted zones.
+    :param route53: boto3 Route 53 client
     :return: The hosted zone ID if found, otherwise None.
     """
     try:
@@ -295,13 +307,14 @@ def get_hosted_zone_id_from_name(domain_name):
         ) from e
 
 
-def list_hosted_zones():
+def list_hosted_zones(route53: Any) -> None:
     """
     List all hosted zones in Route 53.
 
     This function iterates over all hosted zones in Route 53 and prints out each
     zone's ID and name.
 
+    :param route53: boto3 Route 53 client
     :return: None
     """
     try:
@@ -317,7 +330,7 @@ def list_hosted_zones():
         raise RuntimeError(f"route53:ListHostedZones failed: {e}") from e
 
 
-def get_current_record(zone_id, record_name):
+def get_current_record(zone_id: str, record_name: str, route53: Any) -> dict:
     """
     Retrieve the current record details for a given record name in a specified hosted zone.
 
@@ -327,6 +340,7 @@ def get_current_record(zone_id, record_name):
 
     :param zone_id: The ID of the hosted zone to search in.
     :param record_name: The name of the record to retrieve details for.
+    :param route53: boto3 Route 53 client
     :return: A dictionary containing the record details if found, otherwise an empty dictionary.
              For standard records, "Values" will be a list of all values.
              For alias records, "AliasTarget" will contain alias details.
@@ -364,7 +378,7 @@ def get_current_record(zone_id, record_name):
     return result
 
 
-def list_rr(zone_id, record_name):
+def list_rr(zone_id: str, record_name: str, route53: Any) -> None:
     """
     List resource record sets for a specific record name within a given hosted zone.
 
@@ -376,6 +390,7 @@ def list_rr(zone_id, record_name):
 
     :param zone_id: The ID of the hosted zone to search in.
     :param record_name: The name of the record to start listing from.
+    :param route53: boto3 Route 53 client
     :return: None
     """
     try:
@@ -425,7 +440,15 @@ def list_rr(zone_id, record_name):
         ) from e
 
 
-def change_rr(action, zone_id, record_type, record_name, value, ttl):
+def change_rr(
+    action: str,
+    zone_id: str,
+    record_type: str,
+    record_name: str,
+    value: str,
+    ttl: int,
+    route53: Any,
+) -> dict:
     """
     Update a resource record set in a specified hosted zone.
 
@@ -453,6 +476,7 @@ def change_rr(action, zone_id, record_type, record_name, value, ttl):
     :param record_name: The name of the record to update
     :param value: The new value of the record
     :param ttl: The TTL of the record
+    :param route53: boto3 Route 53 client
     :return: The response from the AWS API
     """
     try:
@@ -487,12 +511,7 @@ def change_rr(action, zone_id, record_type, record_name, value, ttl):
 # Begin main script
 ####################################################################################################
 
-# boto3 clients are populated by main() before any helper is called.
-route53 = None
-ec2 = None
-
-
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="r53", description="Manage resource records in AWS Route 53"
     )
@@ -544,9 +563,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def build_clients(profile, region):
+def build_clients(profile: Optional[str], region: Optional[str]) -> Clients:
     """Initialize boto3 session and clients. Raises on failure."""
-    global route53, ec2
     if profile is not None:
         logger.info("Using AWS profile: %s", profile)
         try:
@@ -564,8 +582,10 @@ def build_clients(profile, region):
     except (BotoCoreError, NoCredentialsError, NoRegionError) as e:
         raise RuntimeError(f"Failed to create AWS client: {e}") from e
 
+    return Clients(route53=route53, ec2=ec2)
 
-def resolve_value(args):
+
+def resolve_value(args: argparse.Namespace, ec2: Any) -> Optional[str]:
     """Resolve the record value from --value/--eip/--myip/--instanceid.
 
     Returns the resolved value (possibly None) and validates that at most one
@@ -577,7 +597,7 @@ def resolve_value(args):
         raise ValueError("Specify only one of value, eip, myip, or instanceid")
 
     if args.eip is not None:
-        value = get_ip_from_eip(args.eip)
+        value = get_ip_from_eip(args.eip, ec2)
         logger.debug("Calculated value from eip: %s", value)
         return value
     if args.myip:
@@ -585,13 +605,13 @@ def resolve_value(args):
         logger.debug("Calculated value from IP lookup: %s", value)
         return value
     if args.instanceid is not None:
-        value = get_instance_ip(args.instanceid)
+        value = get_instance_ip(args.instanceid, ec2)
         logger.debug("Calculated value from EC2 instance ID: %s", value)
         return value
     return args.value
 
 
-def infer_record_type(explicit_type, value):
+def infer_record_type(explicit_type: Optional[str], value: Optional[str]) -> Optional[str]:
     """Infer the DNS record type from the value if not explicitly given."""
     if explicit_type is not None:
         return explicit_type
@@ -613,13 +633,13 @@ def infer_record_type(explicit_type, value):
     return inferred
 
 
-def resolve_zone_id(zone_name):
+def resolve_zone_id(zone_name: Optional[str], route53: Any) -> Optional[str]:
     """Look up the Route 53 zone ID for a zone name, or raise if not found."""
     if zone_name is None:
         return None
     if not is_valid_dns_name(zone_name):
         raise ValueError(f"Invalid zone name: {zone_name}")
-    zone_id = get_hosted_zone_id_from_name(zone_name)
+    zone_id = get_hosted_zone_id_from_name(zone_name, route53)
     if zone_id is None:
         raise ValueError(
             f"Zone '{zone_name}' not found in Route 53. "
@@ -629,7 +649,13 @@ def resolve_zone_id(zone_name):
     return zone_id
 
 
-def determine_action(zone_id, record_name, record_type, value, delete):
+def determine_action(
+    zone_id: Optional[str],
+    record_name: Optional[str],
+    record_type: Optional[str],
+    value: Optional[str],
+    delete: bool,
+) -> str:
     """Decide which action to perform based on the argument combination.
 
     Logic is described in README.md file
@@ -647,9 +673,9 @@ def determine_action(zone_id, record_name, record_type, value, delete):
     return "UPSERT"
 
 
-def execute_delete(zone_id, record_name, record_type):
+def execute_delete(zone_id: str, record_name: str, record_type: str, route53: Any) -> None:
     """Delete a record after verifying it exists, is not an alias, and is single-valued."""
-    current_record = get_current_record(zone_id, record_name)
+    current_record = get_current_record(zone_id, record_name, route53)
 
     if not current_record:
         raise ValueError(f"Cannot delete nonexistent record: {record_name}")
@@ -673,10 +699,10 @@ def execute_delete(zone_id, record_name, record_type):
         "Executing action: action:DELETE zoneid:%s recordname:%s value:%s ttl:%s",
         zone_id, record_name, value, current_record["TTL"],
     )
-    change_rr("DELETE", zone_id, record_type, record_name, value, current_record["TTL"])
+    change_rr("DELETE", zone_id, record_type, record_name, value, current_record["TTL"], route53)
 
 
-def main():
+def main() -> None:
     args = parse_args()
     logger.debug("Arguments: %s", str(args))
 
@@ -685,11 +711,11 @@ def main():
             f"TTL must be between 0 and 2147483647 seconds, got: {args.ttl}"
         )
 
-    build_clients(args.profile, args.region)
+    clients = build_clients(args.profile, args.region)
 
-    value = resolve_value(args)
+    value = resolve_value(args, clients.ec2)
     record_type = infer_record_type(args.type, value)
-    zone_id = resolve_zone_id(args.zone)
+    zone_id = resolve_zone_id(args.zone, clients.route53)
 
     record_name = args.name
     if record_name is not None and args.zone is not None:
@@ -699,27 +725,43 @@ def main():
     action = determine_action(zone_id, record_name, record_type, value, args.delete)
     logger.info("Inferred action: %s", action)
 
+    # determine_action returns LIST/DESCRIBE/UPSERT/DELETE only when their
+    # required fields are non-None; these asserts narrow Optional[...] for
+    # the type checker and document the invariant.
     match action:
         case "LISTZONES":
             logger.debug("Executing action: action:%s", action)
-            list_hosted_zones()
+            list_hosted_zones(clients.route53)
         case "LIST":
+            assert zone_id is not None
             logger.debug("Executing action: action:%s zoneid:%s", action, zone_id)
-            list_rr(zone_id, ".")
+            list_rr(zone_id, ".", clients.route53)
         case "DESCRIBE":
+            assert zone_id is not None and record_name is not None
             logger.debug(
                 "Executing action: action:%s zoneid:%s recordname:%s",
                 action, zone_id, record_name,
             )
-            list_rr(zone_id, record_name)
+            list_rr(zone_id, record_name, clients.route53)
         case "UPSERT":
+            assert (
+                zone_id is not None
+                and record_name is not None
+                and record_type is not None
+                and value is not None
+            )
             logger.debug(
                 "Executing action: action:%s zoneid:%s recordname:%s value:%s ttl:%s",
                 action, zone_id, record_name, value, args.ttl,
             )
-            change_rr(action, zone_id, record_type, record_name, value, args.ttl)
+            change_rr(action, zone_id, record_type, record_name, value, args.ttl, clients.route53)
         case "DELETE":
-            execute_delete(zone_id, record_name, record_type)
+            assert (
+                zone_id is not None
+                and record_name is not None
+                and record_type is not None
+            )
+            execute_delete(zone_id, record_name, record_type, clients.route53)
         case _:
             raise ValueError("Invalid parameter combination and/or values.")
 
