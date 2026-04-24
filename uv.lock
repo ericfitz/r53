@@ -277,7 +277,7 @@ requires-dist = [{ name = "boto3", specifier = ">=1.35.81" }]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest", specifier = ">=9.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
 ]
 
