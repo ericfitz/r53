@@ -115,9 +115,9 @@ The script infers the action from the combination of parameters you provide. You
 
 1. **No zone → LISTZONES.** Lists every hosted zone in the account.
 2. **Zone but no name → LIST.** Lists every record in that zone.
-3. **Zone + name but no type → DESCRIBE.** Shows the current record (if any) for that name.
-4. **Zone + name + type + value → UPSERT.** Creates or updates the record.
-5. **Zone + name + type + `--delete` (no value) → DELETE.** Removes the record. `--delete` is mandatory as a safety check, even when the full set of identifying parameters is present.
+3. **Zone + name, no value, no type → DESCRIBE.** Shows the current record (if any) for that name. Passing `--type` without a value (and without `--delete`) is an error, not a DESCRIBE.
+4. **Zone + name + value → UPSERT.** Creates or updates the record. Pass `--type` explicitly, or let it be inferred from the value shape (IPv4 → `A`, IPv6 → `AAAA`, hostname → `CNAME`). For any other record type, `--type` is required.
+5. **Zone + name + type + `--delete` → DELETE.** Removes the record. `--delete` is mandatory as a safety check. `--type` is required because no value is given from which to infer one.
 
 On error (invalid parameters, AWS API failure, network issues), the script logs a message and exits with code `1`. On success, it exits with code `0`.
 
