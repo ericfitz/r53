@@ -1,0 +1,10 @@
+# exclude all by default
+*
+
+# actual project files
+!r53.py
+!README.md
+!pyproject.toml
+!uv.lock
+
+
