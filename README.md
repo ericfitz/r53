@@ -97,14 +97,29 @@ To list hosted zones, run the script with no `--zone` argument.
 
 ## USING THE SCRIPT
 
-The script tries to infer as much information as possible:
+The script infers the action from the combination of parameters you provide. You never specify the action directly (except for `--delete`, which is a safety flag). The inference rules are:
 
-- If no zone is specified, the script attempts to list hosted zones.
-- If only a zone and a record name are specified, the script attempts to look up and display matching records.
-- If a new value is provided for the record itself or for the TTL, the script attempts to upsert (add or
-  update) the record.
-- Deletes explicitly require the --delete option.
-- Type is optional if the type can be cleanly inferred from the value and the value is correctly formatted (e.g. A, AAAA or CNAME).
+| Action     | `--zone` | `--name` | `--type`        | value source     | `--delete` |
+| ---------- | -------- | -------- | --------------- | ---------------- | ---------- |
+| LISTZONES  | —        | —        | —               | —                | —          |
+| LIST       | required | —        | —               | —                | —          |
+| DESCRIBE   | required | required | —               | —                | —          |
+| UPSERT     | required | required | optional †      | required ‡       | —          |
+| DELETE     | required | required | required        | —                | required   |
+
+† `--type` can be omitted for UPSERT when the value format unambiguously implies a type: IPv4 → `A`, IPv6 → `AAAA`, hostname → `CNAME`. For any other record type (`MX`, `TXT`, `SRV`, etc.) you must pass `--type` explicitly.
+
+‡ For UPSERT, the value comes from **exactly one** of `--value`, `--eip`, `--myip`, or `--instanceid`. Specifying more than one is an error.
+
+**How the inference works:**
+
+1. **No zone → LISTZONES.** Lists every hosted zone in the account.
+2. **Zone but no name → LIST.** Lists every record in that zone.
+3. **Zone + name but no type → DESCRIBE.** Shows the current record (if any) for that name.
+4. **Zone + name + type + value → UPSERT.** Creates or updates the record.
+5. **Zone + name + type + `--delete` (no value) → DELETE.** Removes the record. `--delete` is mandatory as a safety check, even when the full set of identifying parameters is present.
+
+On error (invalid parameters, AWS API failure, network issues), the script logs a message and exits with code `1`. On success, it exits with code `0`.
 
 ## EXAMPLES
 
