@@ -228,22 +228,27 @@ def is_valid_dns_name(dns_name: str) -> bool:
     Validate a DNS name.
 
     Given a string, this function checks if that string is a valid DNS name.
-    A valid DNS name must be 255 characters or fewer, and each label within
-    the name must be 63 characters or fewer. The function also allows for
-    the presence of a trailing dot, which is stripped before validation.
+    A valid DNS name must be 253 characters or fewer in printable form (per
+    RFC 1035, which allows 255 octets on the wire including a length prefix
+    per label and a null-root terminator). Each label must be 1-63 characters,
+    contain only ASCII letters, digits, and hyphens, and must not start or
+    end with a hyphen. A single trailing dot is allowed and stripped before
+    length and format validation.
+
+    Punycode-encoded internationalized domain names (e.g. xn--bcher-kva.example)
+    are accepted because they are ASCII at the DNS layer. Raw Unicode input
+    is rejected.
 
     :param dns_name: A string to be validated as a DNS name
     :return: True if the DNS name is valid, False otherwise
     """
     try:
-        if len(dns_name) > 255:
-            return False
         if not dns_name:
             return False
         if dns_name[-1] == ".":
-            dns_name = dns_name[
-                :-1
-            ]  # strip exactly one dot from the right, if present
+            dns_name = dns_name[:-1]  # strip one trailing dot before validating
+        if len(dns_name) > 253:
+            return False
         allowed = re.compile(
             r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",  # noqa: E501 - do not split regex across lines
             re.IGNORECASE,
@@ -252,31 +257,6 @@ def is_valid_dns_name(dns_name: str) -> bool:
         return False
     validated_dns_name = allowed.match(dns_name)
     return validated_dns_name is not None
-
-
-def is_valid_hostname(hostname: str) -> bool:
-    """
-    Validate a hostname.
-
-    Given a string, this function checks if that string is a valid hostname.
-    A valid hostname must consist of one or more labels separated by periods,
-    where each label may contain alphanumeric characters and hyphens, but must
-    not start or end with a hyphen. Each label must be between 1 and 63 characters,
-    and the entire hostname must not exceed 255 characters.
-
-    :param hostname: A string to be validated as a hostname
-    :return: True if the hostname is valid, False otherwise
-    """
-    try:
-        if len(hostname) > 255:
-            return False
-        allowed = re.compile(
-            r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",  # noqa: E501 - do not split regex across lines
-            re.IGNORECASE,
-        )
-        return allowed.match(hostname) is not None
-    except TypeError:
-        return False
 
 
 def get_hosted_zone_id_from_name(domain_name: str, route53: Any) -> Optional[str]:

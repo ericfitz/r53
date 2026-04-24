@@ -4,7 +4,6 @@ import pytest
 
 from r53 import (
     is_valid_dns_name,
-    is_valid_hostname,
     is_valid_ipv4_address,
     is_valid_ipv6_address,
 )
@@ -77,7 +76,13 @@ def test_is_valid_ipv6_address_non_string():
         ("a" * 64 + ".com", False),
         (("a" * 63 + ".") * 4 + "com", False),
         (".", False),
-        (("a" * 63 + ".") * 3 + "a" * 63, True),
+        # 253-char name (no trailing dot): the RFC 1035 maximum.
+        (("a" * 63 + ".") * 3 + "a" * 61, True),
+        # 253-char name with trailing dot: 254 chars input, stripped to 253.
+        (("a" * 63 + ".") * 3 + "a" * 61 + ".", True),
+        # 254-char name (no trailing dot): one over the limit.
+        (("a" * 63 + ".") * 3 + "a" * 62, False),
+        # 256-char, trailing dot, still over after strip (255 chars).
         (("a" * 63 + ".") * 4, False),
     ],
 )
@@ -87,26 +92,3 @@ def test_is_valid_dns_name(name, expected):
 
 def test_is_valid_dns_name_non_string():
     assert is_valid_dns_name(None) is False
-
-
-@pytest.mark.parametrize(
-    "hostname,expected",
-    [
-        ("host", True),
-        ("host.example.com", True),
-        ("HOST.EXAMPLE.COM", True),
-        ("-host", False),
-        ("host-", False),
-        ("host..example.com", False),
-        ("", False),
-        ("a" * 64, False),
-        (("a" * 63 + ".") * 3 + "a" * 63, True),
-        (("a" * 63 + ".") * 4, False),
-    ],
-)
-def test_is_valid_hostname(hostname, expected):
-    assert is_valid_hostname(hostname) is expected
-
-
-def test_is_valid_hostname_non_string():
-    assert is_valid_hostname(None) is False
