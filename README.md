@@ -9,36 +9,41 @@ The script can also set an A record to an EC2 instance's public IP address, even
 ## COMMAND LINE HELP
 
 ```
-usage: r53 [-h] [--profile PROFILE] [--region REGION] [--delete]
-           [--list-hosted-zones] [--zone ZONE] [--name NAME]
-           [--type {A,AAAA,CAA,CNAME,MX,NAPTR,SPF,SRV,TXT}] [--ttl TTL]
-           [--value VALUE] [--eip EIP] [--myip] [--instanceid INSTANCEID]
+usage: r53 [-h] [--profile PROFILE] [--region REGION] [--delete] [--zone ZONE]
+           [--name NAME]
+           [--type {A,AAAA,CAA,CNAME,MX,NAPTR,NS,PTR,SOA,SPF,SRV,TXT}]
+           [--ttl TTL] [--value VALUE] [--eip EIP] [--myip]
+           [--instanceid INSTANCEID]
 
 Manage resource records in AWS Route 53
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  --profile PROFILE     Use a specific named profile in AWS configuration
-  --region REGION       target AWS API calls against a specific region where
-                        applicable
-  --delete              delete a resource record from a zone
-  --list-hosted-zones   list all hosted zones
+  --profile PROFILE     Use the specified AWS configuration profile instead of
+                        the default profile.
+  --region REGION       Targets AWS API calls against the specified region
+                        instead of the default region in AWS configuration.
+  --delete              Delete a resource record from a zone.
   --zone ZONE           DNS name of target zone
   --name NAME           name of resource record
-  --type {A,AAAA,CAA,CNAME,MX,NAPTR,SPF,SRV,TXT}
-                        resource record type
-  --ttl TTL             TTL (in seconds)
-  --value VALUE         value to set in resource record
-  --eip EIP             EIP allocation ID; sets value to the EIP address. Type
-                        and value parameters are ignored if EIP is specified.
-  --myip                sets value to the calling computers public IP address.
-                        Type and value parameters are ignored if myip is
-                        specified.  Local IP is looked up at https://checkip.amazonaws.com
+  --type {A,AAAA,CAA,CNAME,MX,NAPTR,NS,PTR,SOA,SPF,SRV,TXT}
+                        Specifies the DNS resource record type
+  --ttl TTL             TTL (in seconds, 0-2147483647)
+  --value VALUE         Specifies the value to set in the resource record
+  --eip EIP             Sets value to the IP address associated with the
+                        specified EIP. Type and value parameters are ignored
+                        if EIP is specified.
+  --myip                Uses the calling computer's public IP address. Type
+                        and value parameters are ignored if --myip is
+                        specified. Local IP is looked up at
+                        https://checkip.amazonaws.com
   --instanceid INSTANCEID
-                        EC2 instance ID; sets value to the public IP address
-                        of the instance. Type and value parameters are ignored
-                        if instanceid is specified.
+                        Sets value to the public IP address of the specified
+                        EC2 instance. Type and value parameters are ignored if
+                        instance ID is specified.
 ```
+
+To list hosted zones, run the script with no `--zone` argument.
 
 ## SETUP
 
@@ -61,7 +66,8 @@ optional arguments:
 
    The following AWS permissions are required; set them using IAM policy on the IAM user or role you're using.
 
-   - ec2:DescribeInstances
+   - ec2:DescribeInstances (required for `--instanceid`)
+   - ec2:DescribeAddresses (required for `--eip`)
    - route53:ListHostedZones
    - route53:ListResourceRecordSets
    - route53:ChangeResourceRecordSets
@@ -142,6 +148,8 @@ all record types that Route53 supports.
 ## TROUBLESHOOTING
 
 botocore InvalidClientTokenId - this means that your credentials are wrong or missing. Set up new a new key pair with IAM.
+
+On any error, the script logs a message and exits with code `1`. On success, it exits with code `0`. This makes it safe to use in shell pipelines (`&&`, `||`) and cron (where a non-zero exit can trigger mail/alerts).
 
 ## DYNAMIC DNS
 
