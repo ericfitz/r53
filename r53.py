@@ -632,7 +632,7 @@ def resolve_zone_id(zone_name):
 def determine_action(zone_id, record_name, record_type, value, delete):
     """Decide which action to perform based on the argument combination.
 
-    Logic is described in Google sheet: https://bit.ly/r53params
+    Logic is described in README.md file
     """
     if zone_id is None:
         return "LISTZONES"
