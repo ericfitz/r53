@@ -76,6 +76,11 @@ class Clients:
     ec2: Any
 
 
+# Public IP lookup (used by --myip / dynamic DNS)
+CHECKIP_URL = "https://checkip.amazonaws.com"
+CHECKIP_TIMEOUT_SECONDS = 5
+CHECKIP_MAX_BODY_BYTES = 64
+
 # Record types that can break DNS/PKI if changed by accident.
 # UPSERT/DELETE require a matching --allow-* flag.
 DANGEROUS_RECORD_TYPES = frozenset({"NS", "SOA", "CAA"})
@@ -168,16 +173,46 @@ def get_my_ip() -> str:
     """
     Get the public IP address of the host running this script.
 
-    The value is obtained from AWS's public IP address service.
+    The value is obtained from AWS's public IP address service
+    (https://checkip.amazonaws.com). The response is size-bounded,
+    normalized (whitespace stripped), then validated as IPv4 or IPv6
+    before being returned.
 
     Returns:
         str: the public IP address of this host.
+
+    Raises:
+        RuntimeError: on network failure, oversized/non-UTF-8 body, or
+            a body that is not a valid IP address after normalization.
     """
     try:
-        with request.urlopen("https://checkip.amazonaws.com") as f:
-            return f.read().decode("utf-8").strip()
-    except (error.URLError, error.HTTPError, socket.error) as e:
+        with request.urlopen(
+            CHECKIP_URL, timeout=CHECKIP_TIMEOUT_SECONDS
+        ) as f:
+            raw = f.read(CHECKIP_MAX_BODY_BYTES + 1)
+    except (error.URLError, error.HTTPError, socket.error, TimeoutError, OSError) as e:
         raise RuntimeError(f"Error retrieving public IP address: {e}") from e
+
+    if len(raw) > CHECKIP_MAX_BODY_BYTES:
+        raise RuntimeError(
+            "Public IP lookup returned an unexpectedly large response"
+        )
+
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise RuntimeError(
+            f"Public IP lookup returned non-UTF-8 data: {e}"
+        ) from e
+
+    # Normalize first (strip surrounding whitespace/newlines), then validate.
+    value = text.strip()
+
+    if is_valid_ipv4_address(value) or is_valid_ipv6_address(value):
+        return value
+    raise RuntimeError(
+        f"Public IP lookup returned a non-IP value: {value!r}"
+    )
 
 
 # https://stackoverflow.com/questions/319279/how-to-validate-ip-address-in-python
