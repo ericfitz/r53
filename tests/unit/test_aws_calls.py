@@ -4,12 +4,14 @@ import pytest
 
 from r53 import (
     change_rr,
+    find_hosted_zones_by_name,
     get_current_record,
     get_hosted_zone_id_from_name,
     get_instance_ip,
     get_ip_from_eip,
     list_hosted_zones,
     list_rr,
+    select_hosted_zone_id,
 )
 
 
@@ -244,6 +246,108 @@ def test_get_hosted_zone_id_client_error(stubbed_route53):
 
     with pytest.raises(RuntimeError, match="route53:ListHostedZones failed"):
         get_hosted_zone_id_from_name("example.com", client)
+
+
+def test_find_hosted_zones_by_name_multiple(stubbed_route53):
+    client, stubber = stubbed_route53
+    stubber.add_response(
+        "list_hosted_zones",
+        {
+            "HostedZones": [
+                {
+                    "Id": "/hostedzone/ZPUBLIC",
+                    "Name": "example.com.",
+                    "CallerReference": "a",
+                    "Config": {"PrivateZone": False},
+                },
+                {
+                    "Id": "/hostedzone/ZPRIVATE",
+                    "Name": "example.com.",
+                    "CallerReference": "b",
+                    "Config": {"PrivateZone": True},
+                },
+                {
+                    "Id": "/hostedzone/ZOTHER",
+                    "Name": "other.com.",
+                    "CallerReference": "c",
+                    "Config": {"PrivateZone": False},
+                },
+            ],
+            "Marker": "",
+            "IsTruncated": False,
+            "MaxItems": "100",
+        },
+    )
+
+    matches = find_hosted_zones_by_name("example.com", client)
+    assert matches == [
+        {"id": "ZPUBLIC", "name": "example.com"},
+        {"id": "ZPRIVATE", "name": "example.com"},
+    ]
+
+
+def test_get_hosted_zone_id_prompts_on_multiple(stubbed_route53):
+    client, stubber = stubbed_route53
+    stubber.add_response(
+        "list_hosted_zones",
+        {
+            "HostedZones": [
+                {
+                    "Id": "/hostedzone/Z1",
+                    "Name": "example.com.",
+                    "CallerReference": "a",
+                    "Config": {"PrivateZone": False},
+                },
+                {
+                    "Id": "/hostedzone/Z2",
+                    "Name": "example.com.",
+                    "CallerReference": "b",
+                    "Config": {"PrivateZone": True},
+                },
+            ],
+            "Marker": "",
+            "IsTruncated": False,
+            "MaxItems": "100",
+        },
+    )
+
+    assert (
+        get_hosted_zone_id_from_name(
+            "example.com", client, input_fn=lambda _prompt: "2"
+        )
+        == "Z2"
+    )
+
+
+def test_select_hosted_zone_id_cancel():
+    matches = [
+        {"id": "Z1", "name": "example.com"},
+        {"id": "Z2", "name": "example.com"},
+    ]
+    with pytest.raises(ValueError, match="Cancelled by user"):
+        # 3 is cancel when there are 2 matches
+        select_hosted_zone_id(matches, input_fn=lambda _prompt: "3")
+
+
+def test_select_hosted_zone_id_retries_then_selects():
+    matches = [
+        {"id": "Z1", "name": "example.com"},
+        {"id": "Z2", "name": "example.com"},
+    ]
+    answers = iter(["nope", "0", "1"])
+    assert (
+        select_hosted_zone_id(matches, input_fn=lambda _prompt: next(answers))
+        == "Z1"
+    )
+
+
+def test_select_hosted_zone_id_single_no_prompt():
+    matches = [{"id": "Z1", "name": "example.com"}]
+    # input_fn must not be called
+    def boom(_prompt):
+        raise AssertionError("should not prompt for a single match")
+
+    assert select_hosted_zone_id(matches, input_fn=boom) == "Z1"
 
 
 # ---------- list_hosted_zones ----------

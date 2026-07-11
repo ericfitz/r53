@@ -53,6 +53,7 @@ Author:
 import argparse
 import re
 import socket
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Optional
 from urllib import request, error
@@ -73,6 +74,7 @@ class Clients:
     """Bundle of boto3 clients used by this script."""
     route53: Any
     ec2: Any
+
 
 # set up logging
 logger = logging.getLogger(__name__)
@@ -259,36 +261,124 @@ def is_valid_dns_name(dns_name: str) -> bool:
     return validated_dns_name is not None
 
 
-def get_hosted_zone_id_from_name(domain_name: str, route53: Any) -> Optional[str]:
+def find_hosted_zones_by_name(
+    domain_name: str, route53: Any
+) -> list[dict[str, str]]:
     """
-    Retrieve the hosted zone ID for a given domain name.
+    Find all hosted zones whose name matches domain_name.
 
-    This function iterates over all hosted zones in Route 53 and compares their
-    names to the provided domain name. If a match is found, it returns the
-    corresponding hosted zone ID. If no match is found, it returns None.
+    AWS allows multiple hosted zones with the same name in one account
+    (e.g. public + private split-view, or multiple public zones). This
+    returns every match as {"id": zone_id, "name": zone_name}.
 
-    :param domain_name: The domain name to search for in Route 53 hosted zones.
+    :param domain_name: Domain name to match (no trailing dot expected).
     :param route53: boto3 Route 53 client
-    :return: The hosted zone ID if found, otherwise None.
+    :return: List of matching zones (possibly empty).
     """
+    matches: list[dict[str, str]] = []
     try:
         paginator = route53.get_paginator("list_hosted_zones")
-        response_iterator = paginator.paginate()
-        for response in response_iterator:
-            zones = response["HostedZones"]
-            for zone in zones:
-                zone_id = (zone["Id"].split("/")[-1:])[0]
-                # 1. split by / into a list of strings
-                # 2. get list of last string only
-                # 3. convert list to string
-                current_zone_name = zone["Name"].rstrip(".")  # remove trailing .
+        for response in paginator.paginate():
+            for zone in response["HostedZones"]:
+                zone_id = zone["Id"].split("/")[-1]
+                current_zone_name = zone["Name"].rstrip(".")
                 if current_zone_name == domain_name:
-                    return zone_id
-        return None
+                    matches.append({"id": zone_id, "name": current_zone_name})
+        return matches
     except ClientError as e:
         raise RuntimeError(
             f"route53:ListHostedZones failed while resolving {domain_name}: {e}"
         ) from e
+
+
+def select_hosted_zone_id(
+    matches: list[dict[str, str]],
+    input_fn: Callable[[str], str] = input,
+) -> str:
+    """
+    Choose a hosted zone ID from one or more name matches.
+
+    A single match is returned without prompting. Multiple matches present
+    an interactive menu:
+
+        1. example.com (Z111)
+        2. example.com (Z222)
+        3. Cancel this request.
+
+    :param matches: Non-empty list of {"id", "name"} dicts from
+        find_hosted_zones_by_name.
+    :param input_fn: Prompt function (injectable for tests); default input().
+    :return: Selected hosted zone ID.
+    :raises ValueError: If the user cancels or provides no usable input.
+    """
+    if not matches:
+        raise ValueError("No hosted zone matches to select from")
+    if len(matches) == 1:
+        return matches[0]["id"]
+
+    print(
+        f"Multiple hosted zones named '{matches[0]['name']}' found. "
+        "Select one:",
+        file=sys.stderr,
+    )
+    for i, match in enumerate(matches, start=1):
+        print(f"{i}. {match['name']} ({match['id']})", file=sys.stderr)
+    cancel_n = len(matches) + 1
+    print(f"{cancel_n}. Cancel this request.", file=sys.stderr)
+
+    while True:
+        try:
+            choice = input_fn(f"Enter choice [1-{cancel_n}]: ").strip()
+        except EOFError as e:
+            raise ValueError(
+                "Cancelled: multiple hosted zones match and no interactive input is available"
+            ) from e
+
+        if not choice.isdigit():
+            print(
+                f"Please enter a number between 1 and {cancel_n}.",
+                file=sys.stderr,
+            )
+            continue
+        n = int(choice)
+        if n == cancel_n:
+            raise ValueError("Cancelled by user")
+        if 1 <= n <= len(matches):
+            selected = matches[n - 1]["id"]
+            logger.info(
+                "Selected hosted zone %s (%s)",
+                matches[n - 1]["name"],
+                selected,
+            )
+            return selected
+        print(
+            f"Please enter a number between 1 and {cancel_n}.",
+            file=sys.stderr,
+        )
+
+
+def get_hosted_zone_id_from_name(
+    domain_name: str,
+    route53: Any,
+    input_fn: Callable[[str], str] = input,
+) -> Optional[str]:
+    """
+    Retrieve the hosted zone ID for a given domain name.
+
+    If exactly one hosted zone matches, its ID is returned. If several
+    match (same name, different IDs), the user is prompted to choose.
+    If none match, returns None.
+
+    :param domain_name: The domain name to search for in Route 53 hosted zones.
+    :param route53: boto3 Route 53 client
+    :param input_fn: Prompt function used when multiple zones match.
+    :return: The hosted zone ID if found/selected, otherwise None.
+    :raises ValueError: If the user cancels multi-zone selection.
+    """
+    matches = find_hosted_zones_by_name(domain_name, route53)
+    if not matches:
+        return None
+    return select_hosted_zone_id(matches, input_fn=input_fn)
 
 
 def list_hosted_zones(route53: Any) -> None:
@@ -617,13 +707,20 @@ def infer_record_type(explicit_type: Optional[str], value: Optional[str]) -> Opt
     return inferred
 
 
-def resolve_zone_id(zone_name: Optional[str], route53: Any) -> Optional[str]:
-    """Look up the Route 53 zone ID for a zone name, or raise if not found."""
+def resolve_zone_id(
+    zone_name: Optional[str],
+    route53: Any,
+    input_fn: Callable[[str], str] = input,
+) -> Optional[str]:
+    """Look up the Route 53 zone ID for a zone name, or raise if not found.
+
+    When multiple hosted zones share the same name, prompts via input_fn.
+    """
     if zone_name is None:
         return None
     if not is_valid_dns_name(zone_name):
         raise ValueError(f"Invalid zone name: {zone_name}")
-    zone_id = get_hosted_zone_id_from_name(zone_name, route53)
+    zone_id = get_hosted_zone_id_from_name(zone_name, route53, input_fn=input_fn)
     if zone_id is None:
         raise ValueError(
             f"Zone '{zone_name}' not found in Route 53. "
@@ -686,7 +783,11 @@ def execute_delete(zone_id: str, record_name: str, record_type: str, route53: An
     change_rr("DELETE", zone_id, record_type, record_name, value, current_record["TTL"], route53)
 
 
-def main(argv: Optional[list[str]] = None, clients: Optional[Clients] = None) -> None:
+def main(
+    argv: Optional[list[str]] = None,
+    clients: Optional[Clients] = None,
+    input_fn: Callable[[str], str] = input,
+) -> None:
     args = parse_args(argv)
     logger.debug("Arguments: %s", str(args))
 
@@ -700,7 +801,7 @@ def main(argv: Optional[list[str]] = None, clients: Optional[Clients] = None) ->
 
     value = resolve_value(args, clients.ec2)
     record_type = infer_record_type(args.type, value)
-    zone_id = resolve_zone_id(args.zone, clients.route53)
+    zone_id = resolve_zone_id(args.zone, clients.route53, input_fn=input_fn)
 
     record_name = args.name
     if record_name is not None and args.zone is not None:

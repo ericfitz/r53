@@ -276,3 +276,57 @@ def test_main_delete_nonexistent(stubbed_route53, stubbed_ec2):
             ],
             clients=Clients(route53=r53_client, ec2=ec2_client),
         )
+
+
+def test_main_multiple_zones_selects_via_menu(stubbed_route53, stubbed_ec2, capsys):
+    r53_client, r53_stubber = stubbed_route53
+    ec2_client, _ = stubbed_ec2
+    r53_stubber.add_response(
+        "list_hosted_zones",
+        _zones_response([("ZPUBLIC", "example.com"), ("ZPRIVATE", "example.com")]),
+    )
+    r53_stubber.add_response(
+        "list_resource_record_sets",
+        _rrsets_response(
+            [
+                {
+                    "Name": "foo.example.com.",
+                    "Type": "A",
+                    "TTL": 300,
+                    "ResourceRecords": [{"Value": "1.2.3.4"}],
+                }
+            ]
+        ),
+        expected_params={
+            "HostedZoneId": "ZPRIVATE",
+            "StartRecordName": "foo.example.com",
+        },
+    )
+
+    main(
+        argv=["--zone", "example.com", "--name", "foo"],
+        clients=Clients(route53=r53_client, ec2=ec2_client),
+        input_fn=lambda _prompt: "2",
+    )
+    captured = capsys.readouterr()
+    assert "Value: 1.2.3.4" in captured.out
+    # Menu is printed to stderr
+    assert "1. example.com (ZPUBLIC)" in captured.err
+    assert "2. example.com (ZPRIVATE)" in captured.err
+    assert "3. Cancel this request." in captured.err
+
+
+def test_main_multiple_zones_cancel(stubbed_route53, stubbed_ec2):
+    r53_client, r53_stubber = stubbed_route53
+    ec2_client, _ = stubbed_ec2
+    r53_stubber.add_response(
+        "list_hosted_zones",
+        _zones_response([("Z1", "example.com"), ("Z2", "example.com")]),
+    )
+
+    with pytest.raises(ValueError, match="Cancelled by user"):
+        main(
+            argv=["--zone", "example.com"],
+            clients=Clients(route53=r53_client, ec2=ec2_client),
+            input_fn=lambda _prompt: "3",
+        )
