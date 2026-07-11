@@ -749,6 +749,49 @@ def resolve_zone_id(
     return zone_id
 
 
+def build_record_name(
+    name: Optional[str], zone: Optional[str]
+) -> Optional[str]:
+    """
+    Build and validate the FQDN for a resource record.
+
+    --name is relative to --zone (e.g. name=home, zone=example.com →
+    home.example.com). Both the relative name and the concatenated FQDN
+    are validated. If --name already looks fully qualified for the zone
+    (equals the zone or ends with .<zone>), raise to prevent creating
+    names like home.example.com.example.com.
+
+    :return: FQDN string, or None if name is None.
+    """
+    if name is None:
+        return None
+
+    name_norm = name.rstrip(".")
+    if not name_norm:
+        raise ValueError(f"Invalid record name: {name!r}")
+    if not is_valid_dns_name(name_norm):
+        raise ValueError(f"Invalid record name: {name!r}")
+
+    if zone is None:
+        return name_norm
+
+    zone_norm = zone.rstrip(".")
+    name_l = name_norm.lower()
+    zone_l = zone_norm.lower()
+    if name_l == zone_l or name_l.endswith("." + zone_l):
+        raise ValueError(
+            f"--name {name!r} already looks fully qualified for zone {zone!r}. "
+            "Pass only the relative label(s), e.g. --name home"
+        )
+
+    record_name = f"{name_norm}.{zone_norm}"
+    if not is_valid_dns_name(record_name):
+        raise ValueError(
+            f"Invalid FQDN after concatenation: {record_name!r}"
+        )
+    return record_name
+
+
 def require_allow_for_dangerous_type(
     record_type: Optional[str],
     action: str,
@@ -847,12 +890,14 @@ def main(
 
     value = resolve_value(args, clients.ec2)
     record_type = infer_record_type(args.type, value)
-    zone_id = resolve_zone_id(args.zone, clients.route53, input_fn=input_fn)
 
-    record_name = args.name
-    if record_name is not None and args.zone is not None:
-        record_name = f"{args.name}.{args.zone}"
-        logger.debug("Concatenated record name: %s", record_name)
+    # Validate name/FQDN before any zone lookup so bad input does not
+    # trigger multi-zone prompts or ListHostedZones calls.
+    record_name = build_record_name(args.name, args.zone)
+    if record_name is not None:
+        logger.debug("Record name: %s", record_name)
+
+    zone_id = resolve_zone_id(args.zone, clients.route53, input_fn=input_fn)
 
     action = determine_action(zone_id, record_name, record_type, value, args.delete)
     logger.info("Inferred action: %s", action)

@@ -397,3 +397,19 @@ def test_main_caa_upsert_allowed_with_flag(stubbed_route53, stubbed_ec2):
         ],
         clients=Clients(route53=r53_client, ec2=ec2_client),
     )
+
+
+def test_main_invalid_record_name(stubbed_route53, stubbed_ec2):
+    r53_client, _ = stubbed_route53
+    ec2_client, _ = stubbed_ec2
+    # Name validation runs before ListHostedZones; no stub response needed.
+
+    with pytest.raises(ValueError, match="already looks fully qualified"):
+        main(
+            argv=[
+                "--zone", "example.com",
+                "--name", "foo.example.com",
+                "--value", "1.2.3.4",
+            ],
+            clients=Clients(route53=r53_client, ec2=ec2_client),
+        )
