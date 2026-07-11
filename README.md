@@ -13,7 +13,7 @@ usage: r53 [-h] [--profile PROFILE] [--region REGION] [--delete] [--zone ZONE]
            [--name NAME]
            [--type {A,AAAA,CAA,CNAME,MX,NAPTR,NS,PTR,SOA,SPF,SRV,TXT}]
            [--ttl TTL] [--value VALUE] [--eip EIP] [--myip]
-           [--instanceid INSTANCEID]
+           [--instanceid INSTANCEID] [--allow-ns] [--allow-soa] [--allow-caa]
 
 Manage resource records in AWS Route 53
 
@@ -35,15 +35,21 @@ options:
                         if EIP is specified.
   --myip                Uses the calling computer's public IP address. Type
                         and value parameters are ignored if --myip is
-                        specified. Local IP is looked up at
-                        https://checkip.amazonaws.com
+                        specified.
   --instanceid INSTANCEID
                         Sets value to the public IP address of the specified
                         EC2 instance. Type and value parameters are ignored if
                         instance ID is specified.
+  --allow-ns            Permit UPSERT/DELETE of NS records (changes DNS
+                        delegation).
+  --allow-soa           Permit UPSERT/DELETE of SOA records.
+  --allow-caa           Permit UPSERT/DELETE of CAA records (affects
+                        certificate issuance).
 ```
 
 To list hosted zones, run the script with no `--zone` argument.
+
+Public IP for `--myip` is looked up at https://checkip.amazonaws.com.
 
 ## SETUP
 
@@ -119,6 +125,21 @@ The script infers the action from the combination of parameters you provide. You
 4. **Zone + name + value → UPSERT.** Creates or updates the record. Pass `--type` explicitly, or let it be inferred from the value shape (IPv4 → `A`, IPv6 → `AAAA`, hostname → `CNAME`). For any other record type, `--type` is required.
 5. **Zone + name + type + `--delete` → DELETE.** Removes the record. `--delete` is mandatory as a safety check. `--type` is required because no value is given from which to infer one.
 
+**Sensitive record types:** UPSERT and DELETE of `NS`, `SOA`, and `CAA` records require an explicit allow flag. Listing and describing these types does not. Without the flag, the script refuses the change and exits with an error:
+
+| Type | Flag | Why it is gated |
+| ---- | ---- | --------------- |
+| `NS` | `--allow-ns` | Can change DNS delegation |
+| `SOA` | `--allow-soa` | Modifies zone authority data |
+| `CAA` | `--allow-caa` | Affects certificate issuance |
+
+Example:
+
+```bash
+uv run r53.py --zone example.com --name www --type CAA \
+  --value '0 issue "letsencrypt.org"' --allow-caa
+```
+
 On error (invalid parameters, AWS API failure, network issues), the script logs a message and exits with code `1`. On success, it exits with code `0`.
 
 ## EXAMPLES
@@ -140,6 +161,8 @@ uv run r53.py --zone example.com --name test --value ::1          # create/updat
                                                                     as IPv6 implies AAAA)
 uv run r53.py --zone example.com --name test --value foo.bar.com  # create/update a CNAME record (--type CNAME is optional
                                                                     as hostname implies CNAME)
+uv run r53.py --zone example.com --name deleg --type NS \
+  --value ns1.example.net --allow-ns                              # NS/SOA/CAA upserts need --allow-*
 uv run r53.py --profile profilename ...                           # use the keys and configuration from the profilename
                                                                     profile in ~/.aws/credentials
 uv run r53.py --region us-east-1 ...                              # override the region specified in .aws configuration

@@ -76,6 +76,10 @@ class Clients:
     ec2: Any
 
 
+# Record types that can break DNS/PKI if changed by accident.
+# UPSERT/DELETE require a matching --allow-* flag.
+DANGEROUS_RECORD_TYPES = frozenset({"NS", "SOA", "CAA"})
+
 # set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
@@ -634,6 +638,21 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         action="store",
         help="Sets value to the public IP address of the specified EC2 instance. Type and value parameters are ignored if instance ID is specified.",
     )
+    parser.add_argument(
+        "--allow-ns",
+        action="store_true",
+        help="Permit UPSERT/DELETE of NS records (changes DNS delegation).",
+    )
+    parser.add_argument(
+        "--allow-soa",
+        action="store_true",
+        help="Permit UPSERT/DELETE of SOA records.",
+    )
+    parser.add_argument(
+        "--allow-caa",
+        action="store_true",
+        help="Permit UPSERT/DELETE of CAA records (affects certificate issuance).",
+    )
     return parser.parse_args(argv)
 
 
@@ -730,6 +749,33 @@ def resolve_zone_id(
     return zone_id
 
 
+def require_allow_for_dangerous_type(
+    record_type: Optional[str],
+    action: str,
+    *,
+    allow_ns: bool,
+    allow_soa: bool,
+    allow_caa: bool,
+) -> None:
+    """Refuse UPSERT/DELETE of NS/SOA/CAA unless the matching --allow-* flag is set."""
+    if action not in ("UPSERT", "DELETE") or record_type is None:
+        return
+    if record_type not in DANGEROUS_RECORD_TYPES:
+        return
+
+    flags = {
+        "NS": (allow_ns, "--allow-ns", "can change DNS delegation"),
+        "SOA": (allow_soa, "--allow-soa", "modifies zone authority data"),
+        "CAA": (allow_caa, "--allow-caa", "affects certificate issuance"),
+    }
+    allowed, flag, reason = flags[record_type]
+    if not allowed:
+        raise ValueError(
+            f"{record_type} records {reason}. "
+            f"Re-run with {flag} if this is intentional."
+        )
+
+
 def determine_action(
     zone_id: Optional[str],
     record_name: Optional[str],
@@ -810,6 +856,14 @@ def main(
 
     action = determine_action(zone_id, record_name, record_type, value, args.delete)
     logger.info("Inferred action: %s", action)
+
+    require_allow_for_dangerous_type(
+        record_type,
+        action,
+        allow_ns=args.allow_ns,
+        allow_soa=args.allow_soa,
+        allow_caa=args.allow_caa,
+    )
 
     # determine_action returns LIST/DESCRIBE/UPSERT/DELETE only when their
     # required fields are non-None; these asserts narrow Optional[...] for

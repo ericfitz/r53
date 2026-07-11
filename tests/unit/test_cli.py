@@ -330,3 +330,70 @@ def test_main_multiple_zones_cancel(stubbed_route53, stubbed_ec2):
             clients=Clients(route53=r53_client, ec2=ec2_client),
             input_fn=lambda _prompt: "3",
         )
+
+
+def test_main_ns_upsert_requires_allow_ns(stubbed_route53, stubbed_ec2):
+    r53_client, r53_stubber = stubbed_route53
+    ec2_client, _ = stubbed_ec2
+    r53_stubber.add_response(
+        "list_hosted_zones", _zones_response([("Z1", "example.com")])
+    )
+
+    with pytest.raises(ValueError, match="--allow-ns"):
+        main(
+            argv=[
+                "--zone", "example.com",
+                "--name", "deleg",
+                "--type", "NS",
+                "--value", "ns1.example.net",
+            ],
+            clients=Clients(route53=r53_client, ec2=ec2_client),
+        )
+
+
+def test_main_caa_upsert_allowed_with_flag(stubbed_route53, stubbed_ec2):
+    r53_client, r53_stubber = stubbed_route53
+    ec2_client, _ = stubbed_ec2
+    r53_stubber.add_response(
+        "list_hosted_zones", _zones_response([("Z1", "example.com")])
+    )
+    r53_stubber.add_response(
+        "change_resource_record_sets",
+        {
+            "ChangeInfo": {
+                "Id": "/change/C1",
+                "Status": "PENDING",
+                "SubmittedAt": __import__("datetime").datetime(2026, 1, 1),
+            }
+        },
+        expected_params={
+            "HostedZoneId": "Z1",
+            "ChangeBatch": {
+                "Comment": "r53.py",
+                "Changes": [
+                    {
+                        "Action": "UPSERT",
+                        "ResourceRecordSet": {
+                            "Name": "foo.example.com",
+                            "Type": "CAA",
+                            "TTL": 300,
+                            "ResourceRecords": [
+                                {"Value": '0 issue "letsencrypt.org"'}
+                            ],
+                        },
+                    }
+                ],
+            },
+        },
+    )
+
+    main(
+        argv=[
+            "--zone", "example.com",
+            "--name", "foo",
+            "--type", "CAA",
+            "--value", '0 issue "letsencrypt.org"',
+            "--allow-caa",
+        ],
+        clients=Clients(route53=r53_client, ec2=ec2_client),
+    )
