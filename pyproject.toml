@@ -9,7 +9,7 @@ authors = [
     { name = "Eric Fitzgerald" },
 ]
 dependencies = [
-    "boto3>=1.43.92",
+    "boto3>=1.43.97",
 ]
 
 [dependency-groups]
