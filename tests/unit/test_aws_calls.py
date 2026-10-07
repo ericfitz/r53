@@ -14,7 +14,6 @@ from r53 import (
     select_hosted_zone_id,
 )
 
-
 # ---------- get_instance_ip ----------
 
 def test_get_instance_ip_happy_path(stubbed_ec2):

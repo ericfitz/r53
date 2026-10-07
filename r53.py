@@ -51,14 +51,16 @@ Author:
 """
 
 import argparse
+import logging
 import re
 import socket
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Optional
-from urllib import request, error
-import sys
-import logging
+from typing import Any
+from urllib import error, request
+
+import boto3
 from botocore.exceptions import (
     BotoCoreError,
     ClientError,
@@ -66,7 +68,6 @@ from botocore.exceptions import (
     NoRegionError,
     ProfileNotFound,
 )
-import boto3
 
 
 @dataclass
@@ -190,7 +191,7 @@ def get_my_ip() -> str:
             CHECKIP_URL, timeout=CHECKIP_TIMEOUT_SECONDS
         ) as f:
             raw = f.read(CHECKIP_MAX_BODY_BYTES + 1)
-    except (error.URLError, error.HTTPError, socket.error, TimeoutError, OSError) as e:
+    except (error.URLError, error.HTTPError, TimeoutError, OSError) as e:
         raise RuntimeError(f"Error retrieving public IP address: {e}") from e
 
     if len(raw) > CHECKIP_MAX_BODY_BYTES:
@@ -231,14 +232,14 @@ def is_valid_ipv4_address(address: str) -> bool:
     except AttributeError:  # no inet_pton here, sorry
         try:
             socket.inet_aton(address)
-        except socket.error:
+        except OSError:
             return False
         # https://www.oreilly.com/library/view/regular-expressions-cookbook/9780596802837/ch07s16.html
         re_ipv4 = re.compile(
             r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
         )
         return bool(re_ipv4.match(address))
-    except socket.error:  # not a valid address
+    except OSError:  # not a valid address
         return False
     except TypeError:
         return False
@@ -256,7 +257,7 @@ def is_valid_ipv6_address(address: str) -> bool:
     """
     try:
         socket.inet_pton(socket.AF_INET6, address)
-    except socket.error:  # not a valid address
+    except OSError:  # not a valid address
         return False
     except TypeError:
         return False
@@ -291,7 +292,7 @@ def is_valid_dns_name(dns_name: str) -> bool:
         if len(dns_name) > 253:
             return False
         allowed = re.compile(
-            r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",  # noqa: E501 - do not split regex across lines
+            r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",
             re.IGNORECASE,
         )
     except TypeError:
@@ -400,7 +401,7 @@ def get_hosted_zone_id_from_name(
     domain_name: str,
     route53: Any,
     input_fn: Callable[[str], str] = input,
-) -> Optional[str]:
+) -> str | None:
     """
     Retrieve the hosted zone ID for a given domain name.
 
@@ -624,7 +625,7 @@ def change_rr(
 # Begin main script
 ####################################################################################################
 
-def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="r53", description="Manage resource records in AWS Route 53"
     )
@@ -691,7 +692,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def build_clients(profile: Optional[str], region: Optional[str]) -> Clients:
+def build_clients(profile: str | None, region: str | None) -> Clients:
     """Initialize boto3 session and clients. Raises on failure."""
     if profile is not None:
         logger.info("Using AWS profile: %s", profile)
@@ -713,7 +714,7 @@ def build_clients(profile: Optional[str], region: Optional[str]) -> Clients:
     return Clients(route53=route53, ec2=ec2)
 
 
-def resolve_value(args: argparse.Namespace, ec2: Any) -> Optional[str]:
+def resolve_value(args: argparse.Namespace, ec2: Any) -> str | None:
     """Resolve the record value from --value/--eip/--myip/--instanceid.
 
     Returns the resolved value (possibly None) and validates that at most one
@@ -739,7 +740,7 @@ def resolve_value(args: argparse.Namespace, ec2: Any) -> Optional[str]:
     return args.value
 
 
-def infer_record_type(explicit_type: Optional[str], value: Optional[str]) -> Optional[str]:
+def infer_record_type(explicit_type: str | None, value: str | None) -> str | None:
     """Infer the DNS record type from the value if not explicitly given."""
     if explicit_type is not None:
         return explicit_type
@@ -762,10 +763,10 @@ def infer_record_type(explicit_type: Optional[str], value: Optional[str]) -> Opt
 
 
 def resolve_zone_id(
-    zone_name: Optional[str],
+    zone_name: str | None,
     route53: Any,
     input_fn: Callable[[str], str] = input,
-) -> Optional[str]:
+) -> str | None:
     """Look up the Route 53 zone ID for a zone name, or raise if not found.
 
     When multiple hosted zones share the same name, prompts via input_fn.
@@ -785,8 +786,8 @@ def resolve_zone_id(
 
 
 def build_record_name(
-    name: Optional[str], zone: Optional[str]
-) -> Optional[str]:
+    name: str | None, zone: str | None
+) -> str | None:
     """
     Build and validate the FQDN for a resource record.
 
@@ -828,7 +829,7 @@ def build_record_name(
 
 
 def require_allow_for_dangerous_type(
-    record_type: Optional[str],
+    record_type: str | None,
     action: str,
     *,
     allow_ns: bool,
@@ -855,10 +856,10 @@ def require_allow_for_dangerous_type(
 
 
 def determine_action(
-    zone_id: Optional[str],
-    record_name: Optional[str],
-    record_type: Optional[str],
-    value: Optional[str],
+    zone_id: str | None,
+    record_name: str | None,
+    record_type: str | None,
+    value: str | None,
     delete: bool,
 ) -> str:
     """Decide which action to perform based on the argument combination.
@@ -908,8 +909,8 @@ def execute_delete(zone_id: str, record_name: str, record_type: str, route53: An
 
 
 def main(
-    argv: Optional[list[str]] = None,
-    clients: Optional[Clients] = None,
+    argv: list[str] | None = None,
+    clients: Clients | None = None,
     input_fn: Callable[[str], str] = input,
 ) -> None:
     args = parse_args(argv)

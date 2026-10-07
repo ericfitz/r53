@@ -15,10 +15,11 @@ import sys
 # Allow running as a script: add repo root to sys.path so "tests.integration.*"
 # imports resolve.
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tests.integration.cleanup import sweep  # noqa: E402
-from tests.integration.config import ConfigError, load_config  # noqa: E402
+from tests.integration.cleanup import sweep
+from tests.integration.config import ConfigError, load_config
 
 
 def main() -> int:

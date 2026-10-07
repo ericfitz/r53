@@ -236,14 +236,14 @@ def test_delete_nonexistent_record_fails(
 def test_myip_upsert(
     integration_config, r53_cli, aws_cli, zone_id, itest_record_name
 ):
-    import socket
     from urllib import error, request
+
     import pytest
 
     try:
         with request.urlopen("https://checkip.amazonaws.com", timeout=5) as f:
             expected_ip = f.read().decode("utf-8").strip()
-    except (error.URLError, error.HTTPError, socket.error):
+    except (OSError, error.URLError, error.HTTPError):
         pytest.skip("Cannot reach checkip.amazonaws.com from this host")
 
     short_name = itest_record_name("myip")

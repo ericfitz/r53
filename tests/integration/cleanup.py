@@ -12,10 +12,8 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-from typing import Optional
 
 from .config import IntegrationConfig
-
 
 RECORD_PREFIX = "r53-itest-"
 
@@ -37,7 +35,7 @@ def _run_aws(config: IntegrationConfig, *aws_args: str, check: bool = True) -> s
     return subprocess.run(cmd, check=check, capture_output=True, text=True)
 
 
-def _lookup_zone_id(config: IntegrationConfig) -> Optional[str]:
+def _lookup_zone_id(config: IntegrationConfig) -> str | None:
     """Return the Route 53 hosted-zone ID for config.domain, or None if not found."""
     proc = _run_aws(config, "route53", "list-hosted-zones", "--output", "json")
     data = json.loads(proc.stdout)

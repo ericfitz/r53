@@ -20,7 +20,6 @@ import pytest
 from .cleanup import aws_env_args, sweep
 from .config import ConfigError, IntegrationConfig, load_config
 
-
 logger = logging.getLogger(__name__)
 
 

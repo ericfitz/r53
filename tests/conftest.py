@@ -4,8 +4,8 @@ Provides stubbed boto3 clients for Route 53 and EC2 using
 botocore.stub.Stubber, so unit tests make no network calls.
 """
 
-import pytest
 import boto3
+import pytest
 from botocore.stub import Stubber
 
 

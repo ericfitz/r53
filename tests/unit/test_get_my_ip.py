@@ -34,22 +34,28 @@ def test_get_my_ip_accepts_ipv6():
 
 
 def test_get_my_ip_rejects_non_ip_body():
-    with patch("r53.request.urlopen", new=_make_urlopen_mock(b"not-an-ip\n")):
-        with pytest.raises(RuntimeError, match="non-IP value"):
-            get_my_ip()
+    with (
+        patch("r53.request.urlopen", new=_make_urlopen_mock(b"not-an-ip\n")),
+        pytest.raises(RuntimeError, match="non-IP value"),
+    ):
+        get_my_ip()
 
 
 def test_get_my_ip_rejects_oversized_body():
     body = b"1" * (CHECKIP_MAX_BODY_BYTES + 1)
-    with patch("r53.request.urlopen", new=_make_urlopen_mock(body)):
-        with pytest.raises(RuntimeError, match="unexpectedly large"):
-            get_my_ip()
+    with (
+        patch("r53.request.urlopen", new=_make_urlopen_mock(body)),
+        pytest.raises(RuntimeError, match="unexpectedly large"),
+    ):
+        get_my_ip()
 
 
 def test_get_my_ip_raises_runtime_error_on_urlerror():
     def raise_urlerror(*_args, **_kwargs):
         raise URLError("boom")
 
-    with patch("r53.request.urlopen", side_effect=raise_urlerror):
-        with pytest.raises(RuntimeError, match="Error retrieving public IP"):
-            get_my_ip()
+    with (
+        patch("r53.request.urlopen", side_effect=raise_urlerror),
+        pytest.raises(RuntimeError, match="Error retrieving public IP"),
+    ):
+        get_my_ip()

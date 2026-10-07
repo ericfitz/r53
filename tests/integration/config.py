@@ -8,8 +8,6 @@ from __future__ import annotations
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-
 
 CONFIG_FILENAME = ".r53-itest.toml"
 EXAMPLE_FILENAME = ".r53-itest.example.toml"
@@ -22,8 +20,8 @@ class ConfigError(RuntimeError):
 @dataclass(frozen=True)
 class IntegrationConfig:
     domain: str
-    profile: Optional[str]
-    region: Optional[str]
+    profile: str | None
+    region: str | None
 
 
 def _repo_root() -> Path:
