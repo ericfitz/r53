@@ -92,3 +92,8 @@ def test_is_valid_dns_name(name, expected):
 
 def test_is_valid_dns_name_non_string():
     assert is_valid_dns_name(None) is False  # ty: ignore[invalid-argument-type]
+
+
+def test_is_valid_dns_name_bytes_returns_false():
+    # bytes are not str: must be rejected, not raise TypeError from re.match
+    assert is_valid_dns_name(b"example.com") is False  # ty: ignore[invalid-argument-type]

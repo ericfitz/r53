@@ -295,9 +295,9 @@ def is_valid_dns_name(dns_name: str) -> bool:
             r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$",
             re.IGNORECASE,
         )
+        validated_dns_name = allowed.match(dns_name)
     except TypeError:
         return False
-    validated_dns_name = allowed.match(dns_name)
     return validated_dns_name is not None
 
 
